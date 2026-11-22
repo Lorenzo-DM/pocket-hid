@@ -1,0 +1,27 @@
+# Sistema
+.DS_Store
+Thumbs.db
+
+# App (React/Vite/Capacitor)
+app/node_modules/
+app/dist/
+app/.vite/
+app/coverage/
+app/android/app/src/main/assets/
+app/ios/App/App/public/
+
+# Firmware (PlatformIO)
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+firmware/sdkconfig.old
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Ambiente/locale
+.env
+*.local
