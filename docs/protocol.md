@@ -121,7 +121,7 @@ Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
 - **RX char** (app → ESP): `7a0c1001-…` — write e write-without-response (per `mouse` fire-and-forget), **richiede cifratura** (il pairing avviene prima di ogni write)
 - **TX char** (ESP → app): `7a0c1002-…` — notify, cifrata
 - **Device name**: `MK-Remote`; lo scan dell'app filtra per presence del service UUID
-- **MTU**: richiesto 247; messaggi JSON > MTU: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 1KB, overflow → errore e reset)
+- **MTU**: richiesto 247; messaggi JSON > MTU: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 2KB, overflow → errore e reset)
 - **Connection interval**: richiesto 7.5–15ms per mouse fluido
 - **Sicurezza**: pairing/bonding obbligatorio (flag ENC sulle characteristic); l'handshake `hello` resta identico ma senza token (il pairing fa da auth)
 - **Doppio hello**: su ogni riconnessione serve un nuovo `hello`

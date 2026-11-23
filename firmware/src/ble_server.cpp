@@ -11,7 +11,8 @@
 
 // Il GATT non fa streaming: un messaggio JSON arriva completo in una o piu'
 // write (lo stack app-chunka se serve). Accumuliamo finche' il parse riesce.
-#define RX_BUF_MAX 1024
+// 2KB: deve contenere anche macro_save grosse (max blob macro = 2KB)
+#define RX_BUF_MAX 2048
 
 static NimBLECharacteristic* s_tx = nullptr;
 static int s_clients = 0;

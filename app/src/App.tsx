@@ -12,7 +12,7 @@ import { DebugLog } from './components/DebugLog';
 type Tab = 'trackpad' | 'keyboard' | 'media' | 'macro' | 'text';
 
 export default function App() {
-  const { conn, status, statusDetail, device, debug } = useConnection();
+  const { conn, status, statusDetail, device, transport } = useConnection();
   const [tab, setTab] = useState<Tab>('trackpad');
 
   const connected = status === 'ready';
@@ -28,7 +28,7 @@ export default function App() {
           <StatusBar
             status={status}
             device={device}
-            debug={debug}
+            transport={transport}
             onDisconnect={() => conn.disconnect()}
           />
           <nav className="tabs">
@@ -58,7 +58,7 @@ export default function App() {
         </>
       )}
 
-      {debug && <DebugLog />}
+      {transport === 'demo' && <DebugLog />}
     </div>
   );
 }

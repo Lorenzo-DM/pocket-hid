@@ -174,7 +174,34 @@ button.key.mod.active {
   letter-spacing: 0.5px;
 }
 
-.debug-toggle { align-self: center; }
+/* selettore trasporto nella schermata di connessione */
+.transport-tabs {
+  display: flex;
+  gap: 6px;
+}
+.transport-tab {
+  flex: 1;
+  padding: 10px 6px;
+  border: 1px solid #30353f;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.transport-tab.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--key);
+  font-weight: 600;
+}
+
+.transport-badge {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.demo-badge {
 
 .debuglog-toggle {
   position: fixed;

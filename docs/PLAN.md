@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 3–6 scritte (trackpad, speciali/media, macro, BLE+portal+OTA) + modalità debug/demo; **firmware 0.3.0 da ricompilare e testare** (non compilato in sessione). Fase 1 verificata su hardware (2025-11-23).
+> Ultimo aggiornamento: fase 7a (client BLE Web Bluetooth in PWA) scritta; firmware 0.3.0 da ricompilare/testare; fase 7b (Capacitor) in attesa di consenso installazioni. Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -105,6 +105,14 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 **App**: nessuna modifica (il client BLE arriva in fase 7); mock e PWA invariati
 
+### ✅ Fase 7a — Client BLE Web Bluetooth in PWA (codice scritto, NON testato)
+- `protocol/ble_connection.ts`: `BleConnection` implements `DeviceLink` — stesso handshake/heartbeat/backoff del WS; UUID combaciano con `ble_server.cpp`
+- `requestDevice` filtrato per service UUID (fingerprint); riconnessione al device già scelto senza nuovo gesto utente (max 5 tentativi con backoff, poi errore)
+- mouse/scroll → `writeWithoutResponse` (fire-and-forget) se ci sta in un pacchetto (≤244B), resto → long write con risposta; il firmware accumula i JSON multi-write
+- `types/web-bluetooth.d.ts`: tipi minimi scritti a mano, **zero dipendenze installate**
+- ConnectView: selettore trasporto a tab (**🏠 WiFi / 🔵 Bluetooth / 🐞 Demo**), persistito in `mk.transport` (+ chiave `mk.debug`); StatusBar mostra il trasporto attivo
+- Il pairing BLE è confermato dall'OS (il browser mostra la finestra di selezione; l'accoppiamento va confermato)
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -114,7 +122,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Attivazione rapida: anche query param futuro `?debug` (ora solo toggle UI)
 
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
-1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le 5 tab usabili, badge DEMO, log messaggi col pulsante 🐞 (provare anche tab Macro: save/run/del simulati)
+1. **Modalità debug** (nessun hardware): schermata connessione → tab "🐞 Demo" → "Entra in demo" → tutte le 5 tab usabili, badge DEMO, log messaggi col pulsante 🐞 (provare anche tab Macro: save/run/del simulati)
 2. **Ricompilare firmware 0.3.0** (`pio run -e esp32s3`): ⚠️ scaricherà NimBLE-Arduino; ⚠️ cambia partizioni (min_spiffs) → verificare che NVS/credenziali sopravvivano; poi flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"`
 3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
@@ -122,18 +130,19 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 6. Tab Tastiera: riga speciale (Stamp, Home, PgSu/PgGiu, Caps…) e tab Media (volume con repeat, play, power)
 7. Tab Macro: crea una macro (es. testo+invio+attesa+play), salva, esegui sul target, verifica che WS resti reattivo durante l'esecuzione, poi elimina
 8. **Captive portal**: connettersi all'AP `MK-Remote-XXXX` (pass in config.h) → apre la config page → salvare credenziali → riavvio → si riconnette alla rete
-9. **BLE**: dall'app nRF Connect (o Chrome Web Bluetooth quando ci sarà la fase 7): pairing con `MK-Remote`, hello su RX char → welcome su notify
-10. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
+9. **BLE da PWA** (fase 7a): Chrome/Edge → tab "🔵 Bluetooth" → "Seleziona dispositivo" → pairing `MK-Remote` → tutte le funzioni (tastiera/trackpad/macro) via BLE; verificare anche riconnessione e `writeWithoutResponse` per il mouse
+10. **BLE da nRF Connect**: pairing con `MK-Remote`, hello su RX char → welcome su notify
+11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 
 ## Roadmap (prossime fasi)
 
-- **Fase 7**: Guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + Web Bluetooth nella PWA.
+- **Fase 7b** (in attesa consenso): guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + adattare BleConnection al plugin nativo (Web Bluetooth su iOS non esiste).
 - **Fase 8**: PWA servita dall'ESP32 (LittleFS) + manifest PWA + Service Worker cache offline.
 - **Fase 9**: Pagina `/flash` su GitHub Pages (HTTPS richiesto da Web Serial) con **ESP Web Tools** (esptool-js) + pubblicazione binari release + OTA WiFi. Nota: Web Serial ❌ su Safari/iOS; documentare porta UART vs OTG.
 - **Deposito**: spostare routing comandi da `ws_server.cpp` a `command_router.cpp` quando arriva il BLE.
 
 ## Prossima azione
 
-1. Test utente: ricompila/flasha firmware 0.3.0 (prima di tutto: NimBLE scaricato, partizioni cambiate) e testa Fasi 2–6 end-to-end
-2. Se OK → iniziare **Fase 7 (guscio Capacitor + client BLE Web Bluetooth/@capacitor-community/bluetooth-le)**
+1. Test utente: firmware 0.3.0 (Fasi 2–6) + fase 7a (BLE da PWA su Chrome)
+2. **Fase 7b (Capacitor)**: chiedere consenso installazioni — dipendenze previste: `@capacitor/core @capacitor/cli @capacitor/android @capacitor/ios @capacitor-community/bluetooth-le` (+ SDK Android se assente); poi `cap init/add android/ios`
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

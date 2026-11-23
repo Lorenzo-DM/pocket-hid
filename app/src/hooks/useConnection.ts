@@ -1,13 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
 import { Connection, type ConnStatus, type DeviceLink } from '../protocol/connection';
+import { BleConnection } from '../protocol/ble_connection';
 import { MockConnection } from '../protocol/mock_connection';
-import { isDebugMode } from '../protocol/debug';
+import { isDebugMode, setDebugMode } from '../protocol/debug';
 import type { DeviceInfo } from '../protocol/messages';
+
+export type Transport = 'ws' | 'ble' | 'demo';
+const TRANSPORT_KEY = 'mk.transport';
+
+export function currentTransport(): Transport {
+  try {
+    if (isDebugMode()) return 'demo';
+    const t = localStorage.getItem(TRANSPORT_KEY);
+    if (t === 'ble' || t === 'ws') return t;
+  } catch {
+    // storage non disponibile
+  }
+  return 'ws';
+}
+
+export function setTransport(t: Exclude<Transport, 'demo'>) {
+  try {
+    localStorage.setItem(TRANSPORT_KEY, t);
+    setDebugMode(false);
+  } catch {
+    // storage non disponibile
+  }
+}
 
 export function useConnection() {
   const connRef = useRef<DeviceLink | null>(null);
   if (!connRef.current) {
-    connRef.current = isDebugMode() ? new MockConnection() : new Connection();
+    switch (currentTransport()) {
+      case 'demo':
+        connRef.current = new MockConnection();
+        break;
+      case 'ble':
+        connRef.current = new BleConnection();
+        break;
+      default:
+        connRef.current = new Connection();
+    }
   }
   const conn = connRef.current;
 
@@ -31,5 +64,5 @@ export function useConnection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { conn, status, statusDetail, device, debug: isDebugMode() };
+  return { conn, status, statusDetail, device, debug: isDebugMode(), transport: currentTransport() };
 }
