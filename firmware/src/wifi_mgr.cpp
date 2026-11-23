@@ -11,6 +11,9 @@ static DNSServer s_dns;
 static bool s_dnsOn = false;
 static String s_staSsid;   // ssid in uso (NVS o compilato)
 static volatile uint32_t s_rebootAt = 0; // 0 = nessun riavvio programmato
+static bool s_apActive = false;
+static bool s_staUp = false;             // STA collegata (ha preso IP)
+static uint32_t s_apResumeAt = 0;        // 0 = niente riattivazione programmata
 
 // ---------------------------------------------------------------------------
 
@@ -22,19 +25,52 @@ static String ap_ssid() {
   return String(buf);
 }
 
+// AP attivo solo quando serve: avvio, credenziali mancanti, STA caduta.
+// Con lo STA connesso l'AP si spegne (non esporre una rete aperta a inutile).
+static void ap_start() {
+  String apName = ap_ssid();
+  WiFi.softAP(apName.c_str(), MK_AP_PASS);
+  if (!s_dnsOn) s_dnsOn = s_dns.start(53, "*", WiFi.softAPIP());
+  s_apActive = true;
+  Serial.printf("[wifi] AP \"%s\" attivo, IP %s\n", apName.c_str(), WiFi.softAPIP().toString().c_str());
+}
+
+static void ap_stop() {
+  if (!s_apActive) return;
+  if (s_dnsOn) { s_dns.stop(); s_dnsOn = false; }
+  WiFi.softAPdisconnect(true);
+  s_apActive = false;
+  Serial.println("[wifi] AP disattivato (STA connessa)");
+}
+
+static void on_wifi_event(WiFiEvent_t ev, WiFiEventInfo_t) {
+  switch (ev) {
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      s_staUp = true;
+      ap_stop();
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      // riconnessione automatica in corso: riattiva l'AP solo se la caduta
+      // persiste (evita di trasmettere durante un blip del router)
+      if (s_staUp) {
+        s_staUp = false;
+        s_apResumeAt = millis() + 15000;
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 void wifi_begin() {
   s_prefs.begin(NS, true);
   String ssid = s_prefs.getString("ssid", "");
   String pass = s_prefs.getString("pass", "");
   s_prefs.end();
 
-  // AP sempre attivo: captive portal per la config (WPA2)
-  WiFi.mode(WIFI_AP_STA);
-  String apName = ap_ssid();
-  WiFi.softAP(apName.c_str(), MK_AP_PASS);
-  Serial.printf("[wifi] AP \"%s\" attivo, IP %s\n", apName.c_str(), WiFi.softAPIP().toString().c_str());
-
-  s_dnsOn = s_dns.start(53, "*", WiFi.softAPIP());
+  WiFi.mode(WIFI_AP_STA); // resta in AP_STA per poter attivare/spegnere l'AP a runtime
+  WiFi.onEvent(on_wifi_event);
+  ap_start(); // serve subito se le credenziali mancano/non funzionano
 
   if (ssid.length() > 0) {
     s_staSsid = ssid;
@@ -50,6 +86,12 @@ void wifi_begin() {
 
 void wifi_loop() {
   if (s_dnsOn) s_dns.processNextRequest();
+
+  // STA caduta e non rientrata entro la grazia: riattiva l'AP per il fallback
+  if (!s_staUp && s_apResumeAt != 0 && millis() > s_apResumeAt) {
+    s_apResumeAt = 0;
+    ap_start();
+  }
 
   // riavvio programmato dopo il salvataggio delle credenziali
   if (s_rebootAt != 0 && millis() > s_rebootAt) {
@@ -103,9 +145,11 @@ static const char SAVED_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 <p>Credenziali salvate. Il dispositivo si riavvia tra poco…</p>
 </body></html>)rawliteral";
 
-void wifi_portal_routes(AsyncWebServer& server) {
+void wifi_portal_routes(AsyncWebServer& server, const char* portalBase) {
   // pagina di configurazione
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
+  // NB: se la PWA e' montata su LittleFS il portal NON sta su "/" (la PWA
+  // deve prendersi la radice) ma su un path dedicato, es. "/portal".
+  server.on(portalBase, HTTP_GET, [](AsyncWebServerRequest* req) {
     req->send_P(200, "text/html", PORTAL_HTML);
   });
 
@@ -134,19 +178,20 @@ void wifi_portal_routes(AsyncWebServer& server) {
   });
 
   // probe captive portal (Android, iOS, Windows) -> reindirizza al portal
-  server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest* req) {
-    req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+  String probeTarget = String("http://") + WiFi.softAPIP().toString() + portalBase;
+  server.on("/generate_204", HTTP_GET, [probeTarget](AsyncWebServerRequest* req) {
+    req->redirect(probeTarget);
   });
-  server.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest* req) {
-    req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+  server.on("/hotspot-detect.html", HTTP_GET, [probeTarget](AsyncWebServerRequest* req) {
+    req->redirect(probeTarget);
   });
-  server.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest* req) {
-    req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+  server.on("/connecttest.txt", HTTP_GET, [probeTarget](AsyncWebServerRequest* req) {
+    req->redirect(probeTarget);
   });
-  server.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest* req) {
-    req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+  server.on("/ncsi.txt", HTTP_GET, [probeTarget](AsyncWebServerRequest* req) {
+    req->redirect(probeTarget);
   });
-  server.on("/fwlink", HTTP_GET, [](AsyncWebServerRequest* req) {
-    req->redirect(String("http://") + WiFi.softAPIP().toString() + "/");
+  server.on("/fwlink", HTTP_GET, [probeTarget](AsyncWebServerRequest* req) {
+    req->redirect(probeTarget);
   });
 }

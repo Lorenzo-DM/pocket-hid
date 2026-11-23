@@ -93,7 +93,8 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 **WiFi/portal** (`wifi_mgr.cpp`):
 - Credenziali in NVS (`mkcfg`: ssid/pass), **priorità su quelle compilate** (fallback iniziale)
-- AP+STA sempre attivo: SSID `MK-Remote-XXXX`, WPA2 `MK_AP_PASS` (config.h)
+- AP on-demand (modifica post-test): attivo all'avvio e come fallback; si spegne quando lo STA prende IP, riattivato ~15 s dopo una disconnessione persistente. SSID `MK-Remote-XXXX`, WPA2 `MK_AP_PASS` (config.h)
+- Con la PWA montata su LittleFS il portal di config passa a `/portal` (la radice `/` è della PWA); senza PWA il portal resta su `/`
 - Captive portal: DNS wildcard + probe redirect; pagina config `/` con form → `POST /save` → NVS → auto-reboot
 - `GET /wifi-info` diagnostica
 

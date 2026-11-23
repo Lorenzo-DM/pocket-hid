@@ -38,7 +38,7 @@ Telefono (PWA / app Capacitor)
 - **TinyUSB**: composite HID device (keyboard + mouse + consumer control)
 - **NimBLE**: servizio GATT custom (RX/TX chars), pairing obbligatorio
 - **ESPAsyncWebServer**: WebSocket + file statici della PWA + captive portal (DNS redirect)
-- **Modalità AP+STA simultanei**: hotspot ESP + client della rete di casa
+- **Modalità STA + AP on-demand**: connesso alla rete di casa l'hotspot è spento; l'AP si attiva all'avvio, con credenziali mancanti/errate o se lo STA cade (dopo ~15 s di tentativi)
 - Logica: parser comandi, mapping keycode→report HID, layout IT/US, macro in NVS, diagnostica (stato USB/BLE/WiFi)
 
 ### 3. `/docs` — Riferimenti
