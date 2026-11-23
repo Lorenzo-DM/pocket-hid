@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Connection, type ConnStatus } from '../protocol/connection';
+import { Connection, type ConnStatus, type DeviceLink } from '../protocol/connection';
+import { MockConnection } from '../protocol/mock_connection';
+import { isDebugMode } from '../protocol/debug';
 import type { DeviceInfo } from '../protocol/messages';
 
 export function useConnection() {
-  const connRef = useRef<Connection | null>(null);
-  if (!connRef.current) connRef.current = new Connection();
+  const connRef = useRef<DeviceLink | null>(null);
+  if (!connRef.current) {
+    connRef.current = isDebugMode() ? new MockConnection() : new Connection();
+  }
   const conn = connRef.current;
 
   const [status, setStatus] = useState<ConnStatus>('idle');
@@ -27,5 +31,5 @@ export function useConnection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { conn, status, statusDetail, device };
+  return { conn, status, statusDetail, device, debug: isDebugMode() };
 }

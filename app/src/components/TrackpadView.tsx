@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Connection } from '../protocol/connection';
+import type { DeviceLink } from '../protocol/connection';
 
 interface Props {
-  conn: Connection;
+  conn: DeviceLink;
 }
 
 // Trackpad touch:

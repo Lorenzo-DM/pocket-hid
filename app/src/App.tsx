@@ -5,11 +5,12 @@ import { StatusBar } from './components/StatusBar';
 import { KeyboardView } from './components/KeyboardView';
 import { TextView } from './components/TextView';
 import { TrackpadView } from './components/TrackpadView';
+import { DebugLog } from './components/DebugLog';
 
 type Tab = 'trackpad' | 'keyboard' | 'text';
 
 export default function App() {
-  const { conn, status, statusDetail, device } = useConnection();
+  const { conn, status, statusDetail, device, debug } = useConnection();
   const [tab, setTab] = useState<Tab>('trackpad');
 
   const connected = status === 'ready';
@@ -25,6 +26,7 @@ export default function App() {
           <StatusBar
             status={status}
             device={device}
+            debug={debug}
             onDisconnect={() => conn.disconnect()}
           />
           <nav className="tabs">
@@ -45,6 +47,8 @@ export default function App() {
           </main>
         </>
       )}
+
+      {debug && <DebugLog />}
     </div>
   );
 }

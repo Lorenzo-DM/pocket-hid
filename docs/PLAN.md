@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fase 3 (trackpad) scritta e type-checkata, in attesa di test utente; fasi 1–2 completate e **Fase 1 verificata su hardware reale** (sessione debug 2025-11-23).
+> Ultimo aggiornamento: fase 3 (trackpad) + modalità debug/demo (uso app senza ESP, log on-screen); in attesa di test utente. Fase 1 verificata su hardware reale (2025-11-23).
 
 ## Obiettivo
 
@@ -60,11 +60,20 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Pulsanti fisici L/R sotto il pad: pressione prolungata = drag (down/up), non click singolo
 - Tab "Trackpad" predefinito in App.tsx; sensitivity 1.6 costante (regolabile dopo feedback)
 
+### ✅ Modalità debug/demo (trasversale, fuori roadmap)
+- Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
+- `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
+- `app/src/protocol/debug.ts`: flag persistito (`localStorage.mk.debug`) + log store condiviso (tx/rx/info, max 100 righe)
+- `DebugLog.tsx`: pannello flottante 🐞 con ultimi 14 messaggi (tx blu, rx verde, info ambra)
+- Toggle in ConnectView ("🐞 modalità debug (senza ESP)") → ricarica pagina; badge DEMO in status bar
+- Attivazione rapida: anche query param futuro `?debug` (ora solo toggle UI)
+
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
-1. PlatformIO → flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"` sul target
-2. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
-3. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
-4. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
+1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le tab usabili, badge DEMO, log messaggi col pulsante 🐞
+2. PlatformIO → flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"` sul target
+3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
+4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
+5. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
 
 ## Roadmap (prossime fasi)
 

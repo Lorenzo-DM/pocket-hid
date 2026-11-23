@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Connection } from '../protocol/connection';
+import type { DeviceLink } from '../protocol/connection';
 
 interface Props {
-  conn: Connection;
+  conn: DeviceLink;
 }
 
 // Il firmware fase 1 mappa solo ASCII: contiamo i caratteri fuori range

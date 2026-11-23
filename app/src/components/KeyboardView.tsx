@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Connection } from '../protocol/connection';
+import type { DeviceLink } from '../protocol/connection';
 import { K, MOD } from '../protocol/hid';
 
 interface Props {
-  conn: Connection;
+  conn: DeviceLink;
 }
 
 interface KeyDef {

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { Connection } from '../protocol/connection';
+import type { DeviceLink } from '../protocol/connection';
+import { isDebugMode, setDebugMode } from '../protocol/debug';
 
 interface Props {
-  conn: Connection;
+  conn: DeviceLink;
   statusDetail?: string;
 }
 
@@ -12,6 +13,15 @@ const TOKEN_KEY = 'mk.token';
 export function ConnectView({ conn, statusDetail }: Props) {
   const [url, setUrl] = useState(() => localStorage.getItem(URL_KEY) ?? 'ws://esp32-hid.local/ws');
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? '');
+  const [debug, setDebug] = useState(isDebugMode());
+
+  const toggleDebug = () => {
+    const on = !debug;
+    setDebugMode(on);
+    setDebug(on);
+    // il tipo di connessione si sceglie al mount dell'hook: ricarica la pagina
+    location.reload();
+  };
 
   const doConnect = () => {
     localStorage.setItem(URL_KEY, url.trim());
@@ -21,7 +31,7 @@ export function ConnectView({ conn, statusDetail }: Props) {
 
   return (
     <div className="connect">
-      <h1>MK-Remote</h1>
+      <h1>MK-Remote{debug ? ' · debug' : ''}</h1>
       <p className="muted">Tastiera e mouse per la tua TV o il tuo PC</p>
 
       <label>
@@ -47,7 +57,13 @@ export function ConnectView({ conn, statusDetail }: Props) {
         />
       </label>
 
-      <button className="primary" onClick={doConnect}>Connetti</button>
+      <button className="primary" onClick={doConnect}>
+        {debug ? 'Entra in demo' : 'Connetti'}
+      </button>
+
+      <button className="link debug-toggle" onClick={toggleDebug}>
+        {debug ? '✕ esci dalla modalità debug' : '🐞 modalità debug (senza ESP)'}
+      </button>
 
       {statusDetail && <p className="error">{statusDetail}</p>}
 

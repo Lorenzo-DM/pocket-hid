@@ -19,6 +19,15 @@ export interface ConnectionCallbacks {
   onError?: (msg: string) => void;
 }
 
+// Superficie pubblica usata dall'app. Implementata sia dalla Connection
+// reale (WebSocket) sia dalla MockConnection (modalità debug/demo).
+export interface DeviceLink {
+  setCallbacks(cb: ConnectionCallbacks): void;
+  connect(url: string, token?: string): void;
+  disconnect(): void;
+  send(msg: OutMsg): boolean;
+}
+
 const HELLO_TIMEOUT_MS = 4000;
 const HEARTBEAT_MS = 15000;
 const MAX_BACKOFF_MS = 15000;

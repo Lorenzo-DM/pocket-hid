@@ -4,6 +4,7 @@ import type { ConnStatus } from '../protocol/connection';
 interface Props {
   status: ConnStatus;
   device: DeviceInfo | null;
+  debug?: boolean;
   onDisconnect: () => void;
 }
 
@@ -17,9 +18,10 @@ const STATUS_LABEL: Record<ConnStatus, string> = {
   error: 'Errore',
 };
 
-export function StatusBar({ status, device, onDisconnect }: Props) {
+export function StatusBar({ status, device, debug, onDisconnect }: Props) {
   return (
     <header className="statusbar">
+      {debug && <span className="demo-badge">DEMO</span>}
       <span className={`dot ${status === 'ready' ? 'ok' : 'bad'}`} />
       <span className="status-label">{STATUS_LABEL[status]}</span>
       {device && (
