@@ -23,6 +23,19 @@ const MOD_KEYS: { id: number; label: string }[] = [
   { id: MOD.SHIFT, label: 'Shift' },
 ];
 
+// Tasti speciali estesi (fase 4): navigazione e lock, posizione US
+const SPECIAL_KEYS: KeyDef[] = [
+  { label: 'Stamp', code: K.PRINTSCREEN },
+  { label: 'SclL', code: K.SCROLLLOCK },
+  { label: 'Pausa', code: K.PAUSE },
+  { label: 'Ins', code: K.INSERT },
+  { label: 'Home', code: K.HOME },
+  { label: 'Fine', code: K.END },
+  { label: 'PgSu', code: K.PAGEUP },
+  { label: 'PgGiu', code: K.PAGEDOWN },
+  { label: '⇪ Caps', code: K.CAPSLOCK },
+];
+
 const ROWS: KeyDef[][] = [
   [
     { label: 'Esc', code: K.ESC },
@@ -84,6 +97,14 @@ export function KeyboardView({ conn }: Props) {
           </button>
         ))}
         <button className="key" onClick={() => tapKey(K.DELETE)}>Del</button>
+      </div>
+
+      <div className="kb-row kb-special">
+        {SPECIAL_KEYS.map((k, i) => (
+          <button key={i} className="key" onClick={() => tapKey(k.code)}>
+            {k.label}
+          </button>
+        ))}
       </div>
 
       {ROWS.map((row, i) => (

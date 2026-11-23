@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fase 3 (trackpad) + modalità debug/demo (uso app senza ESP, log on-screen); in attesa di test utente. Fase 1 verificata su hardware reale (2025-11-23).
+> Ultimo aggiornamento: fasi 3–4 scritte (trackpad, speciali estesi + media keys) + modalità debug/demo; in attesa di test utente. Fase 1 verificata su hardware reale (2025-11-23).
 
 ## Obiettivo
 
@@ -60,6 +60,12 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Pulsanti fisici L/R sotto il pad: pressione prolungata = drag (down/up), non click singolo
 - Tab "Trackpad" predefinito in App.tsx; sensitivity 1.6 costante (regolabile dopo feedback)
 
+### ✅ Fase 4 — Speciali estesi + media keys (codice scritto, NON testato end-to-end)
+- `hid.ts`: aggiunti PRINTSCREEN/SCROLLLOCK/PAUSE/INSERT/HOME/PAGEUP/END/PAGEDOWN/CAPSLOCK + CONSUMER.STOP/BRIGHTNESS_UP/BRIGHTNESS_DOWN
+- `KeyboardView`: riga compatta di 9 tasti speciali sotto i modificatori (font ridotto)
+- `MediaView` (nuova tab "Media"): volume ± e luminosità ± con **ripetizione a 350ms tenendo premuto**, mute, prev/play/next, stop, power (stile danger)
+- Nota: CapsLock è un tap; lo stato LED del target non è noto all'app (nessun campo nel welcome)
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -69,15 +75,15 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Attivazione rapida: anche query param futuro `?debug` (ora solo toggle UI)
 
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
-1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le tab usabili, badge DEMO, log messaggi col pulsante 🐞
+1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le 4 tab usabili, badge DEMO, log messaggi col pulsante 🐞
 2. PlatformIO → flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"` sul target
 3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
 5. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
+6. Tab Tastiera: riga speciale (Stamp, Home, PgSu/PgGiu, Caps…) e tab Media (volume con repeat, play, power)
 
 ## Roadmap (prossime fasi)
 
-- **Fase 4**: Speciali estesi (Home/End/PgUp/PgDn/CapsLock/Stamp...) + UI media keys (volume/mute/play, page 0x0C).
 - **Fase 5**: Macro — editor UI, runtime sul firmware, persistenza NVS, elenco nel welcome, `macro_save/del/run`.
 - **Fase 6**: BLE GATT custom (NimBLE: RX/TX chars, pairing, interval 7.5–15ms, chunking MTU) + hotspot AP+STA con captive portal → **espansa**: anche config portal per WiFi in NVS (sostituisce credenziali compilate) + preparazione OTA.
 - **Fase 7**: Guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + Web Bluetooth nella PWA.
@@ -87,6 +93,6 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Prossima azione
 
-1. Test utente: Fase 2 (tastiera/testo) + Fase 3 (trackpad) end-to-end (`npm run dev` in `app/` → connessione reale al firmware già operativo)
-2. Se OK → iniziare **Fase 4 (speciali estesi + media keys)**
+1. Test utente: Fasi 2–4 in modalità debug (senza ESP) e poi end-to-end con firmware reale
+2. Se OK → iniziare **Fase 5 (macro: editor UI, runtime firmware, NVS)**
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

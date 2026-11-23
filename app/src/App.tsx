@@ -5,9 +5,10 @@ import { StatusBar } from './components/StatusBar';
 import { KeyboardView } from './components/KeyboardView';
 import { TextView } from './components/TextView';
 import { TrackpadView } from './components/TrackpadView';
+import { MediaView } from './components/MediaView';
 import { DebugLog } from './components/DebugLog';
 
-type Tab = 'trackpad' | 'keyboard' | 'text';
+type Tab = 'trackpad' | 'keyboard' | 'media' | 'text';
 
 export default function App() {
   const { conn, status, statusDetail, device, debug } = useConnection();
@@ -36,6 +37,9 @@ export default function App() {
             <button className={tab === 'keyboard' ? 'active' : ''} onClick={() => setTab('keyboard')}>
               Tastiera
             </button>
+            <button className={tab === 'media' ? 'active' : ''} onClick={() => setTab('media')}>
+              Media
+            </button>
             <button className={tab === 'text' ? 'active' : ''} onClick={() => setTab('text')}>
               Testo
             </button>
@@ -43,6 +47,7 @@ export default function App() {
           <main>
             {tab === 'trackpad' && <TrackpadView conn={conn} />}
             {tab === 'keyboard' && <KeyboardView conn={conn} />}
+            {tab === 'media' && <MediaView conn={conn} />}
             {tab === 'text' && <TextView conn={conn} />}
           </main>
         </>

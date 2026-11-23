@@ -277,6 +277,47 @@ button.key.mod.active {
 }
 .pad-btn:active { background: var(--key-active); }
 
+/* --- Media --- */
+
+.media {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.media-row { display: flex; gap: 10px; }
+
+.media-btn {
+  flex: 1;
+  min-height: 58px;
+  border: 1px solid #30353f;
+  border-radius: 10px;
+  background: var(--key);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+.media-btn:active { background: var(--key-active); }
+.media-btn.danger {
+  background: #3a2226;
+  border-color: var(--danger);
+  color: #f0b8b8;
+}
+.media-btn.danger:active { background: var(--danger); color: #fff; }
+
+.media .hint { text-align: center; }
+
+/* riga tasti speciali più compatta */
+.kb-special .key {
+  min-height: 40px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 /* --- Testo --- */
 
 .textview {
