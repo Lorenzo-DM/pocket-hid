@@ -11,6 +11,8 @@ app/android/app/src/main/assets/
 app/ios/App/App/public/
 
 # Firmware (PlatformIO)
+# immagine filesystem generata da tools/deploy-pwa.sh (copia di app/dist)
+firmware/data/
 firmware/.pio/
 firmware/.pioenvs/
 firmware/.piolibdeps/
