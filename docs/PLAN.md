@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 1–2 completate (codice, test hardware a carico dell'utente).
+> Ultimo aggiornamento: fasi 1–2 completate e **Fase 1 verificata su hardware reale** (sessione debug 2025-11-23). Firmware flashato e funzionante end-to-end.
 
 ## Obiettivo
 
@@ -20,6 +20,16 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - **Test**: l'utente compila/flashta/testa. **Non installare MAI software senza suo consenso.**
 - Limiti noti: target in standby non svegliabile via USB; in hotspot il telefono perde internet; porte USB TV con poca corrente → brownout.
 
+## Hardware reale (scoperte sessione debug 2025-11-23)
+
+- **Scheda con UN SOLO connettore USB-C** (direct OTG, niente bridge UART): non c'è porta COM → i log seriali non sono visibili, il flash richiede download mode via BOOT.
+- **4 MB di flash** (non gli 8 MB di default della board PIO) → `board_upload.flash_size = 4MB` in `platformio.ini`.
+- **Lib Adafruit TinyUSB patchata** in `.pio/libdeps`: `CFG_TUD_HID 2→3` (media keys). ⚠️ La patch viene persa con `pio pkg update`.
+- **Procedura flash-and-run** (v. `docs/troubleshooting.md` §6 e §9): download mode = power-on con BOOT tenuto; dopo il flash la ROM resta in download mode → serve **unplug/replug del cavo** per avviare l'app (reset esptool via USJ non basta).
+- **Init USB TinyUSB corretto** (era il crash principale): `ARDUINO_USB_MODE=0` + `TinyUSBDevice.begin() → usb_hid_begin() → USB.begin()` in `main.cpp`.
+- Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`) — NON committare credenziali.
+- Pagina di test standalone: `tools/mk-test.html` (apribile da file://, si connette a `ws://esp32-hid.local/ws`).
+
 ## File chiave
 
 - `docs/protocol.md` — protocollo di comunicazione (FONT DI VERITÀ: messaggi, keycode HID, GATT, WS)
@@ -30,13 +40,13 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Stato fasi
 
-### ✅ Fase 1 — Firmware base (codice scritto, NON testato su hardware)
-- Composite HID TinyUSB (keyboard 6KRO + mouse + consumer), USB-OTG
-- WS `ws://<ip>/ws`: hello/welcome, token opzionale, comandi key/text/consumer/mouse/mbtn/scroll/state
-- `GET /status`, mDNS, riconnessione WiFi, release tasti su disconnect
+### ✅ Fase 1 — Firmware base (**VERIFICATA su hardware reale, 2025-11-23**)
+- Composite HID TinyUSB (keyboard 6KRO + mouse + consumer), USB-OTG — 3 interfacce HID enumerate
+- WS `ws://<ip>/ws`: hello/welcome, token opzionale, comandi key/text/consumer/mouse/mbtn/scroll/state — handshake e comandi testati via script
+- `GET /status` risponde, mDNS `esp32-hid.local` raggiungibile, WiFi OK
 - Limiti: layout US/ASCII only, text bloccante, un client alla volta, macro stub
-- Config: `firmware/src/config.h` (WiFi SSID/pass, token)
-- Richiede: PlatformIO (installazione a carico utente)
+- Config: `firmware/src/config.h` + `config_local.h` (gitignored) per le credenziali
+- File di sessione debug: `docs/troubleshooting.md` (flash size, init USB, download mode, CDC log)
 
 ### ✅ Fase 2 — PWA base (codice scritto, NON testata end-to-end)
 - Connessione WS con handshake, riconnessione backoff, heartbeat via `{t:"state"}` (15s)
@@ -62,4 +72,6 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Prossima azione
 
-Fare i test utente (fasi 1–2); se OK → spuntare nei doc → iniziare **Fase 3 (trackpad)**.
+1. Testare la **Fase 2 app** end-to-end (`npm run dev` in `app/` → connessione reale al firmware già operativo)
+2. Se OK → iniziare **Fase 3 (trackpad)**
+3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`
