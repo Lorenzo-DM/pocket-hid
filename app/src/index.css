@@ -162,6 +162,56 @@ button.key.mod.active {
 
 .key-space { width: 100%; min-height: 56px; margin-top: 4px; }
 
+/* --- Trackpad --- */
+
+.trackpad {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+}
+
+.pad {
+  flex: 1;
+  min-height: 260px;
+  border: 1px solid #30353f;
+  border-radius: 14px;
+  background: var(--panel);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pad.dragging { border-color: var(--accent); }
+
+.pad-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 10px;
+  pointer-events: none;
+}
+
+.pad-buttons { display: flex; gap: 10px; }
+
+.pad-btn {
+  flex: 1;
+  min-height: 52px;
+  border: 1px solid #30353f;
+  border-radius: 10px;
+  background: var(--key);
+  color: var(--text);
+  font-size: 0.95rem;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+.pad-btn:active { background: var(--key-active); }
+
 /* --- Testo --- */
 
 .textview {

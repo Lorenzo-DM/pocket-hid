@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 1–2 completate e **Fase 1 verificata su hardware reale** (sessione debug 2025-11-23). Firmware flashato e funzionante end-to-end.
+> Ultimo aggiornamento: fase 3 (trackpad) scritta e type-checkata, in attesa di test utente; fasi 1–2 completate e **Fase 1 verificata su hardware reale** (sessione debug 2025-11-23).
 
 ## Obiettivo
 
@@ -54,14 +54,20 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Modalità testo: textarea + invia, warning caratteri non-ASCII
 - Build verificata (tsc + vite). Manca manifest PWA (rimandato a fase 8, aggiungibile subito su richiesta)
 
+### ✅ Fase 3 — Trackpad (codice scritto, NON testato end-to-end)
+- `app/src/components/TrackpadView.tsx`: pointer events, 1 dito = move relativo, tap breve = click sx, long-press 550ms = click dx, 2 dita = scroll
+- Coalescing ~60Hz via rAF; accumulatore con parte frazionaria; **clamp ±120** (firmware usa int8_t, l'eccesso va al frame successivo)
+- Pulsanti fisici L/R sotto il pad: pressione prolungata = drag (down/up), non click singolo
+- Tab "Trackpad" predefinito in App.tsx; sensitivity 1.6 costante (regolabile dopo feedback)
+
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
 1. PlatformIO → flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"` sul target
 2. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 3. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
+4. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
 
 ## Roadmap (prossime fasi)
 
-- **Fase 3**: Trackpad touch (move relativo ~60Hz, tap=click sx, 2 dita=scroll, long-press/zona=click dx). Coalescing mouse, valutare throttling.
 - **Fase 4**: Speciali estesi (Home/End/PgUp/PgDn/CapsLock/Stamp...) + UI media keys (volume/mute/play, page 0x0C).
 - **Fase 5**: Macro — editor UI, runtime sul firmware, persistenza NVS, elenco nel welcome, `macro_save/del/run`.
 - **Fase 6**: BLE GATT custom (NimBLE: RX/TX chars, pairing, interval 7.5–15ms, chunking MTU) + hotspot AP+STA con captive portal → **espansa**: anche config portal per WiFi in NVS (sostituisce credenziali compilate) + preparazione OTA.
@@ -72,6 +78,6 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Prossima azione
 
-1. Testare la **Fase 2 app** end-to-end (`npm run dev` in `app/` → connessione reale al firmware già operativo)
-2. Se OK → iniziare **Fase 3 (trackpad)**
+1. Test utente: Fase 2 (tastiera/testo) + Fase 3 (trackpad) end-to-end (`npm run dev` in `app/` → connessione reale al firmware già operativo)
+2. Se OK → iniziare **Fase 4 (speciali estesi + media keys)**
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

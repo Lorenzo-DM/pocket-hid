@@ -4,12 +4,13 @@ import { ConnectView } from './components/ConnectView';
 import { StatusBar } from './components/StatusBar';
 import { KeyboardView } from './components/KeyboardView';
 import { TextView } from './components/TextView';
+import { TrackpadView } from './components/TrackpadView';
 
-type Tab = 'keyboard' | 'text';
+type Tab = 'trackpad' | 'keyboard' | 'text';
 
 export default function App() {
   const { conn, status, statusDetail, device } = useConnection();
-  const [tab, setTab] = useState<Tab>('keyboard');
+  const [tab, setTab] = useState<Tab>('trackpad');
 
   const connected = status === 'ready';
 
@@ -27,6 +28,9 @@ export default function App() {
             onDisconnect={() => conn.disconnect()}
           />
           <nav className="tabs">
+            <button className={tab === 'trackpad' ? 'active' : ''} onClick={() => setTab('trackpad')}>
+              Trackpad
+            </button>
             <button className={tab === 'keyboard' ? 'active' : ''} onClick={() => setTab('keyboard')}>
               Tastiera
             </button>
@@ -35,6 +39,7 @@ export default function App() {
             </button>
           </nav>
           <main>
+            {tab === 'trackpad' && <TrackpadView conn={conn} />}
             {tab === 'keyboard' && <KeyboardView conn={conn} />}
             {tab === 'text' && <TextView conn={conn} />}
           </main>
