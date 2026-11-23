@@ -25,3 +25,6 @@ firmware/sdkconfig.old
 # Ambiente/locale
 .env
 *.local
+
+# binari firmware per pagina flash (rigenerati dal make-flash-release)
+tools/flash/*.bin

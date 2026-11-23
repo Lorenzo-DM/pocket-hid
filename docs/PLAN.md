@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 1–8 scritte (ultima: PWA da LittleFS + manifest + SW); firmware 0.3.0 da ricompilare + `uploadfs`; test hardware della parte BLE/app ancora da fare. Fase 1 verificata su hardware (2025-11-23).
+> Ultimo aggiornamento: **tutte le 9 fasi scritte** (ultima: pagina /flash con ESP Web Tools + script binari); da fare: test utente completi + pubblicazione GitHub Pages. Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -128,6 +128,13 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - **ConnectView**: se la pagina viene servita dall'ESP (http + host non-localhost), il default WS diventa `ws://<host>/ws` automaticamente; warning se si sceglie BLE senza secure context (Web Bluetooth richiede HTTPS)
 - Limiti: da pagina http dell'ESP il tab BLE è disabilitato dal browser (https o app Android per il BLE); OTA mentre la PWA gira dall'ESP: la pagina /update serve comunque (route API prima di serveStatic)
 
+### ✅ Fase 9 — Pagina /flash + OTA (codice scritto, pubblicazione da fare)
+- `tools/flash/index.html`: pagina statica con **ESP Web Tools** (esptool-js via CDN unpkg, zero build) — installazione firmware da Chrome/Edge su HTTPS; nota compat: **Web Serial ❌ Safari/iOS** (per quelli: OTA `/update` o PC con Chrome); procedura download-mode per board single-USB + replug post-flash
+- `tools/flash/manifest.json`: parti flash con offset S3 (bootloader@0x0, partitions@0x8000, boot_app0@0xe000, app@0x10000); **rigenerato dallo script** con la versione
+- `tools/make-flash-release.sh`: copia i binari dalla build PlatformIO (+ boot_app0 dal core Arduino) e scrive il manifest con la versione di config.h; i bin sono gitignored (rigenerabili)
+- `tools/flash/README.md`: pubblicazione gh-pages (subtree/worktree) + OTA WiFi documentata
+- README.md root aggiornato (struttura, installazione, stato)
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -150,16 +157,22 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 13. **PWA dall'ESP** (fase 8): dopo `pio run -t uploadfs` → aprire `http://esp32-hid.local/` (o IP) → app completa installabile (icona, offline dopo primo load); verifica default WS e warning BLE senza https
+14. **Pagina /flash** (fase 9): `pio run -e esp32s3` + `tools/make-flash-release.sh` → prova pagina da file:// no (serve HTTPS) → pubblicare gh-pages v. `tools/flash/README.md` → installazione firmware da Chrome con ESP Web Tools
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 
 ## Roadmap (prossime fasi)
 
 - **Fase 7b+ iOS**: aggiungere `@capacitor/ios` quando l'utente lo chiede (Xcode necessario).
-- **Fase 9**: Pagina `/flash` su GitHub Pages (HTTPS richiesto da Web Serial) con **ESP Web Tools** (esptool-js) + pubblicazione binari release + OTA WiFi. Nota: Web Serial ❌ su Safari/iOS; documentare porta UART vs OTG.
-- **Deposito**: spostare routing comandi da `ws_server.cpp` a `command_router.cpp` quando arriva il BLE.
+- **Deposito chiuso**: il routing comandi è già estratto in `commands.cpp` (fase 6), condiviso WS/BLE.
+
+## Roadmap post-v1 (eventuali)
+- Release binari firmate e tag GitHub (workflow CI opzionale)
+- Layout IT + unicode a run-length per `text` (v. limiti fase 1)
+- Client multipli simultanei (oggi un client authed per trasporto)
+- Test unitari dell'app (Vitest) e del keymap
 
 ## Prossima azione
 
-1. Test utente: firmware 0.3.0 (`pio run` + `pio run -t uploadfs` + flash), Fasi 2–8 end-to-end + app Android
-2. Se OK → **Fase 9** (pagina /flash su GitHub Pages con ESP Web Tools + release binari + OTA WiFi definitiva)
+1. Test utente completi (lista qui sopra: firmware, portal, BLE, Android, PWA, pagina flash)
+2. Pubblicare la pagina flash su GitHub Pages (v. `tools/flash/README.md`)
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MK-Remote — Flash firmware</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #101216; color: #e6e8ec; max-width: 640px; margin: 0 auto; padding: 32px 20px; line-height: 1.55; }
+    h1 { letter-spacing: .5px; }
+    h1 span { color: #4a90d9; }
+    .card { background: #1a1d23; border: 1px solid #30353f; border-radius: 12px; padding: 20px; margin: 18px 0; }
+    ol li { margin: 8px 0; }
+    code { background: #262a33; padding: 2px 6px; border-radius: 6px; font-size: .9em; }
+    .muted { color: #8b909b; font-size: .9rem; }
+    .warn { color: #d9a441; }
+    esp-web-install-button button {
+      padding: 14px 28px; border: none; border-radius: 10px;
+      background: #4a90d9; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+    }
+    a { color: #4a90d9; }
+  </style>
+  <!-- ESP Web Tools (esptool-js): Web Serial richiede HTTPS -> GitHub Pages
+       funziona; file:// no. Non disponibile su Safari/iOS. -->
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body>
+  <h1>MK-Remote <span>· flash firmware</span></h1>
+  <p class="muted">
+    Installazione via USB con <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+    (esptool-js, tutto in browser — nessun programma da installare).
+  </p>
+
+  <div class="card">
+    <esp-web-install-button manifest="./manifest.json" show-log="false">
+      <button slot="activate">⚡ Installa firmware</button>
+      <span slot="unsupported">
+        <p class="warn">⚠ Web Serial non supportato da questo browser.</p>
+        <p>Usa Chrome o Edge su desktop (Windows/Linux/macOS). <strong>Safari e iOS non sono supportati</strong> — da iPhone/iPad usa la OTA via WiFi (<code>http://&lt;ip-esp&gt;/update</code>) o collega l'ESP a un computer con Chrome.</p>
+      </span>
+      <span slot="not-allowed">
+        <p class="warn">⚠ Questa pagina non è servita in HTTPS o non hai concesso l'accesso: Web Serial funziona solo su pagine sicure.</p>
+      </span>
+    </esp-web-install-button>
+  </div>
+
+  <div class="card">
+    <h2>Procedura per la board single-USB</h2>
+    <ol>
+      <li>Collega la board via USB-C (unico connettore, direct OTG).</li>
+      <li>Premi <strong>⚡ Installa firmware</strong> e scegli la porta <code>USB Serial/JTAG</code>.</li>
+      <li>Se il browser non entra da solo in download mode: <strong>tieni premuto BOOT</strong> mentre ricolleghi il cavo, poi riprova.</li>
+      <li><strong class="warn">Dopo il flash:</strong> la ROM resta in download mode — <strong>stacca e riattacca il cavo</strong> per avviare l'app (il reset via USB-Serial-JTAG non basta).</li>
+      <li>Prima installazione: configura il WiFi dal captive portal — connettiti all'AP <code>MK-Remote-XXXX</code> (password nel file <code>config.h</code> del repo).</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Porte: UART vs OTG</h2>
+    <p class="muted">
+      Sulle board con <strong>due</strong> porte: usa la <strong>UART</strong> per flash/log e la
+      <strong>OTG</strong> per l'HID verso il target. Su questa board single-USB la stessa porta
+      fa tutto: HID quando l'app gira, seriale in download mode.
+    </p>
+    <p class="muted">
+      Alternativa sempre valida: PlatformIO (<code>pio run -t upload</code>) oppure OTA WiFi
+      (<code>/update</code> sull'ESP) per gli aggiornamenti successivi.
+    </p>
+  </div>
+
+  <p class="muted">Versione firmware: vedi <code>manifest.json</code> accanto a questa pagina. <a href="../">Torna al repo</a></p>
+</body>
+</html>
