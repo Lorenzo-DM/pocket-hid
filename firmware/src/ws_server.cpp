@@ -147,13 +147,18 @@ static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t l
   // Handshake: unico punto di auth
   if (!strcmp(t, "hello")) {
     const char* token = doc["token"] | "";
-#if defined(MK_TOKEN) && MK_TOKEN[0] != '\0'
-    if (strcmp(token, MK_TOKEN) != 0) {
+    // il preprocessore non può confrontare stringhe: il check di token
+    // vuoto (= auth disabilitata) va fatto a runtime
+#if defined(MK_TOKEN)
+    const char* kToken = MK_TOKEN;
+#else
+    const char* kToken = "";
+#endif
+    if (kToken[0] != '\0' && strcmp(token, kToken) != 0) {
       send_error(client, "token non valido");
       client->close();
       return;
     }
-#endif
     s_authed = true;
     send_status(client, "welcome");
     return;

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>MK-Remote — pagina di test</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1.5rem; background:#111; color:#ddd; max-width: 640px; }
+  h1 { font-size: 1.2rem; }
+  section { border: 1px solid #333; border-radius: 8px; padding: .8rem; margin-bottom: 1rem; }
+  h2 { font-size: .9rem; margin: .2rem 0 .6rem; color: #8ab; text-transform: uppercase; letter-spacing: .05em; }
+  button { background:#2a2a2a; color:#ddd; border:1px solid #444; border-radius:6px; padding:.5rem .8rem; margin:.15rem; cursor:pointer; font-size:1rem; }
+  button:active { background:#555; }
+  input, output { background:#1a1a1a; color:#eee; border:1px solid #444; border-radius:6px; padding:.4rem; }
+  #status { padding:.5rem; border-radius:6px; font-weight:600; }
+  #status.ok { background:#14401c; } #status.err { background:#401414; }
+  label { font-size:.85rem; }
+  #pad { width: 200px; height: 120px; background:#1e2a36; border-radius:8px; touch-action:none; user-select:none;
+         display:flex; align-items:center; justify-content:center; color:#667; cursor:move; }
+</style>
+</head>
+<body>
+<h1>MK-Remote — pagina di test</h1>
+
+<section>
+  <output id="status">disconnesso</output><br><br>
+  <label>Host: <input id="host" value="ws://esp32-hid.local/ws" size="28"></label>
+  <label>Token: <input id="token" value="" size="12" placeholder="(vuoto ok)"></label>
+  <button id="btnConnect">Connetti</button>
+</section>
+
+<section>
+  <h2>Testo da digitare</h2>
+  <input id="txt" value="ciao dal firmware MK-Remote!" size="34">
+  <button class="act" data-act="text">Digita</button>
+</section>
+
+<section>
+  <h2>Tasti singoli (code HID page 0x07)</h2>
+  <div>
+    <label><input type="checkbox" id="mCtrl"> Ctrl</label>
+    <label><input type="checkbox" id="mShift"> Shift</label>
+    <label><input type="checkbox" id="mAlt"> Alt</label>
+    <label><input type="checkbox" id="mGui"> Win</label>
+  </div><br>
+  <button class="key" data-code="4">A</button> <button class="key" data-code="22">S</button>
+  <button class="key" data-code="7">D</button> <button class="key" data-code="26">W</button>
+  <button class="key" data-code="28">Enter</button> <button class="key" data-code="42">Backspace</button>
+  <button class="key" data-code="44">Tab</button> <button class="key" data-code="41">Esc</button>
+  <button class="key" data-code="52">Up</button> <button class="key" data-code="51">Down</button>
+  <button class="key" data-code="80">←</button> <button class="key" data-code="79">→</button>
+</section>
+
+<section>
+  <h2>Media keys (consumer 0x0C)</h2>
+  <button class="con" data-code="0xE9">Vol +</button>
+  <button class="con" data-code="0xEA">Vol −</button>
+  <button class="con" data-code="0xE2">Mute</button>
+  <button class="con" data-code="0xCD">Play/Pause</button>
+  <button class="con" data-code="0xB5">Next</button>
+  <button class="con" data-code="0xB6">Prev</button>
+</section>
+
+<section>
+  <h2>Mouse</h2>
+  <div id="pad">muovi qui</div><br>
+  <button id="bLeft">⭯ left</button>
+  <button id="bRight">⭯ right</button>
+  <button id="bClick">click</button>
+  <button class="act" data-act="scrollUp">Scroll ▲</button>
+  <button class="act" data-act="scrollDown">Scroll ▼</button>
+</section>
+
+<script>
+let ws = null, host = '';
+
+const status = (s, ok) => { const el = document.getElementById('status');
+  el.textContent = s; el.className = ok ? 'ok' : 'err'; };
+
+function connect() {
+  host = document.getElementById('host').value;
+  status('connessione a ' + host + '…');
+  ws = new WebSocket(host);
+  ws.onopen = () => {
+    status('handshake…');
+    ws.send(JSON.stringify({ t: 'hello', v: 1, caps: [], token: document.getElementById('token').value }));
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.t === 'welcome') status('connesso — fw ' + m.fw + ' · layout ' + m.layout, true);
+    else if (m.t === 'error') status('ERRORE: ' + m.msg);
+  };
+  ws.onerror = () => status('errore WebSocket');
+  ws.onclose = () => status('disconnesso');
+}
+
+const send = (obj) => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
+  status('non connesso'); return false; };
+
+const mods = () => (document.getElementById('mCtrl').checked ? 1 : 0) |
+  (document.getElementById('mShift').checked ? 2 : 0) |
+  (document.getElementById('mAlt').checked ? 4 : 0) |
+  (document.getElementById('mGui').checked ? 8 : 0);
+
+document.getElementById('btnConnect').onclick = connect;
+
+// testo
+document.querySelectorAll('.act').forEach(b => b.onclick = () => {
+  const a = b.dataset.act;
+  if (a === 'text') send({ t: 'text', s: document.getElementById('txt').value });
+  if (a === 'scrollUp') send({ t: 'scroll', dy: -1 });
+  if (a === 'scrollDown') send({ t: 'scroll', dy: 1 });
+});
+
+// tasti
+document.querySelectorAll('.key').forEach(b => b.onpointerdown = () => send({ t: 'key', code: +b.dataset.code, mods: mods(), act: 't' }));
+// consumer
+document.querySelectorAll('.con').forEach(b => b.onclick = () => send({ t: 'consumer', code: parseInt(b.dataset.code) }));
+
+// mouse: trascina il pad = movimento relativo
+const pad = document.getElementById('pad');
+let px = null, py = null;
+pad.onpointerdown = (e) => { px = e.clientX; py = e.clientY; pad.setPointerCapture(e.pointerId); };
+pad.onpointermove = (e) => { if (px === null) return;
+  send({ t: 'mouse', dx: e.clientX - px, dy: e.clientY - py }); px = e.clientX; py = e.clientY; };
+pad.onpointerup = () => { px = py = null; };
+
+document.getElementById('bClick').onclick = () => send({ t: 'mbtn', b: 0, act: 'c' });
+document.getElementById('bLeft').onpointerdown = () => send({ t: 'mbtn', b: 0, act: 'd' });
+document.getElementById('bLeft').onpointerup = () => send({ t: 'mbtn', b: 0, act: 'u' });
+document.getElementById('bRight').onpointerdown = () => send({ t: 'mbtn', b: 1, act: 'd' });
+document.getElementById('bRight').onpointerup = () => send({ t: 'mbtn', b: 1, act: 'u' });
+</script>
+</body>
+</html>

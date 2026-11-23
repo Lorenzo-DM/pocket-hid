@@ -1,0 +1,9 @@
+// File locale gitignored: credenziali reali per la tua scheda.
+// Copia questo file in config_local.h e inserisci i valori veri.
+#pragma once
+
+#define WIFI_SSID "il-tuo-ssid"
+#define WIFI_PASS "la-tua-password"
+
+// Token opzionale WebSocket (vuoto = nessuna auth)
+// #define MK_TOKEN "secret"

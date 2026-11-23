@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <Adafruit_TinyUSB.h>
+#include <USB.h>
 #include "config.h"
 #include "usb_hid.h"
 #include "ws_server.h"
@@ -10,12 +11,18 @@ static uint32_t s_lastWifiAttempt = 0;
 static bool s_mdnsStarted = false;
 
 void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.printf("\n[main] MK-Remote firmware %s\n", MK_FW_VERSION);
-
-  // Composite HID (keyboard + mouse + consumer) su USB-OTG
+  // USB TinyUSB: l'ordine è importante —
+  // 1) TinyUSBDevice.begin() alloca i buffer dei descrittori
+  // 2) usb_hid_begin() aggiunge le interfacce HID
+  // 3) USB.begin() avvia lo stack TinyUSB del core, che serve i descrittori
+  //    tramite i callback strong di Adafruit (tud_descriptor_*_cb)
+  TinyUSBDevice.begin();
   usb_hid_begin();
+  USB.begin();
+
+  Serial.begin(115200);
+
+  Serial.printf("\n[main] MK-Remote firmware %s\n", MK_FW_VERSION);
   Serial.printf("[main] USB HID init, mounted=%d\n", usb_hid_mounted());
 
   // WiFi in modalità station (rete di casa)
@@ -48,7 +55,7 @@ void loop() {
     uint32_t now = millis();
     if (now - s_lastWifiAttempt > 10000) {
       s_lastWifiAttempt = now;
-      Serial.println("[main] WiFi non connesso, riprovo...");
+      Serial.printf("[main] WiFi non connesso, riprovo...\n");
       WiFi.disconnect();
       WiFi.begin(WIFI_SSID, WIFI_PASS);
     }

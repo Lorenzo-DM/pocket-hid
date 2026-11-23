@@ -20,6 +20,7 @@ docs/       protocol.md (fonte di verità) · architecture.md
 
 - [Protocollo di comunicazione](docs/protocol.md)
 - [Architettura](docs/architecture.md)
+- [Risoluzione problemi firmware (log sessione debug)](docs/troubleshooting.md)
 
 ## Stato
 

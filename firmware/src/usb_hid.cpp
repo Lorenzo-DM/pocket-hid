@@ -30,7 +30,7 @@ bool usb_hid_mounted() {
 
 bool kb_send(uint8_t mods, const uint8_t keys[6]) {
   if (!usb_hid_mounted()) return false;
-  return hid_kb.keyboardReport(0, mods, keys);
+  return hid_kb.keyboardReport(0, mods, const_cast<uint8_t*>(keys));
 }
 
 bool kb_clear() {
