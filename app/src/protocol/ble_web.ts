@@ -1,0 +1,76 @@
+// Client BLE via Web Bluetooth (Chrome/Edge desktop+Android).
+// requestDevice richiede il gesto utente solo alla prima scelta: la
+// riconnessione riusa il device già selezionato senza nuovo gesto.
+
+import { BleBase, BLE_SVC, BLE_RX, BLE_TX } from './ble_base';
+
+// oltre questa dimensione si usa la long write (con risposta), che il SO
+// frammenta; sotto, write-without-response (latenza minima)
+const FAST_WRITE_MAX = 244;
+
+export class WebBleLink extends BleBase {
+  private device: BluetoothDevice | null = null;
+  private rxChar: BluetoothRemoteGATTCharacteristic | null = null;
+  private txChar: BluetoothRemoteGATTCharacteristic | null = null;
+
+  protected async open() {
+    this.status('connecting');
+
+    if (!navigator.bluetooth) {
+      this.handleError(
+        'Web Bluetooth non disponibile: usa Chrome/Edge (desktop o Android); su iOS/Android usa la app nativa.'
+      );
+      return;
+    }
+
+    try {
+      if (!this.device) {
+        this.device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [BLE_SVC] }],
+        });
+        this.device.addEventListener('gattserverdisconnected', () => {
+          this.rxChar = null;
+          this.txChar = null;
+          this.onLinkLost();
+        });
+      }
+      if (!this.device.gatt) throw new Error('GATT non disponibile');
+
+      this.status('authing');
+      const server = await this.device.gatt.connect();
+      const svc = await server.getPrimaryService(BLE_SVC);
+      this.txChar = await svc.getCharacteristic(BLE_TX);
+      this.rxChar = await svc.getCharacteristic(BLE_RX);
+      await this.txChar.startNotifications();
+      this.txChar.addEventListener('characteristicvaluechanged', (ev) => {
+        const ch = ev.target as BluetoothRemoteGATTCharacteristic;
+        if (ch.value) this.handleNotify(ch.value);
+      });
+
+      // handshake (il pairing è già avvenuto: write cifrata accettata)
+      this.sendHello();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.handleError(`BLE: ${msg}`);
+    }
+  }
+
+  protected writeRaw(data: Uint8Array, urgent: boolean) {
+    const ch = this.rxChar;
+    if (!ch) return;
+    if (urgent && ch.properties.writeWithoutResponse && data.length <= FAST_WRITE_MAX) {
+      ch.writeValueWithoutResponse?.(data).catch(() => undefined);
+    } else if (ch.properties.write) {
+      ch.writeValueWithResponse?.(data).catch(() => this.cb.onError?.('write BLE non riuscito'));
+    } else {
+      ch.writeValue(data).catch(() => undefined);
+    }
+  }
+
+  protected releaseDevice() {
+    this.device?.gatt.disconnect();
+    this.device = null;
+    this.rxChar = null;
+    this.txChar = null;
+  }
+}

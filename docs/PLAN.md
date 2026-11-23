@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fase 7a (client BLE Web Bluetooth in PWA) scritta; firmware 0.3.0 da ricompilare/testare; fase 7b (Capacitor) in attesa di consenso installazioni. Fase 1 verificata su hardware (2025-11-23).
+> Ultimo aggiornamento: fase 7a+7b scritte (BLE Web Bluetooth + Capacitor Android con plugin bluetooth-le); firmware 0.3.0 da ricompilare/testare; app Android da compilare/aprire in Android Studio (l'utente non ha ancora compilato il guscio). Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -113,6 +113,14 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - ConnectView: selettore trasporto a tab (**🏠 WiFi / 🔵 Bluetooth / 🐞 Demo**), persistito in `mk.transport` (+ chiave `mk.debug`); StatusBar mostra il trasporto attivo
 - Il pairing BLE è confermato dall'OS (il browser mostra la finestra di selezione; l'accoppiamento va confermato)
 
+### ✅ Fase 7b — Guscio Capacitor Android (installazioni approvate dall'utente; NON compilato)
+- Dipendenze installate (consenso 2025-11-23): `@capacitor/core @capacitor/cli @capacitor/android @capacitor-community/bluetooth-le` (Capacitor 8.6, plugin 8.4) — iOS **non** aggiunto (richiesta esplicita: solo Android)
+- `cap init`: appId `io.mkremote.app`, webDir `dist`; cartella `android/` generata e committata
+- Permessi BLE in `android/app/src/main/AndroidManifest.xml` (BLUETOOTH_SCAN neverForLocation + CONNECT); config `plugins.BluetoothLe`
+- **Refactor BLE client**: `ble_base.ts` (macchina a stati comune: hello/heartbeat/backoff) + `ble_web.ts` (Web Bluetooth) + `ble_native.ts` (BleClient plugin, chunk 244B, CONNECTION_PRIORITY_HIGH per il mouse) — scelta automatica via `Capacitor.isNativePlatform()`
+- Script npm: `cap:sync`, `cap:android` (Android Studio), `cap:run-android`
+- Plugin nota: MTU auto-negoziato lato plugin; conn priority richiesta esplicitamente
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -133,16 +141,17 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 9. **BLE da PWA** (fase 7a): Chrome/Edge → tab "🔵 Bluetooth" → "Seleziona dispositivo" → pairing `MK-Remote` → tutte le funzioni (tastiera/trackpad/macro) via BLE; verificare anche riconnessione e `writeWithoutResponse` per il mouse
 10. **BLE da nRF Connect**: pairing con `MK-Remote`, hello su RX char → welcome su notify
 11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
+12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 
 ## Roadmap (prossime fasi)
 
-- **Fase 7b** (in attesa consenso): guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + adattare BleConnection al plugin nativo (Web Bluetooth su iOS non esiste).
+- **Fase 7b+ iOS**: aggiungere `@capacitor/ios` quando l'utente lo chiede (Xcode necessario).
 - **Fase 8**: PWA servita dall'ESP32 (LittleFS) + manifest PWA + Service Worker cache offline.
 - **Fase 9**: Pagina `/flash` su GitHub Pages (HTTPS richiesto da Web Serial) con **ESP Web Tools** (esptool-js) + pubblicazione binari release + OTA WiFi. Nota: Web Serial ❌ su Safari/iOS; documentare porta UART vs OTG.
 - **Deposito**: spostare routing comandi da `ws_server.cpp` a `command_router.cpp` quando arriva il BLE.
 
 ## Prossima azione
 
-1. Test utente: firmware 0.3.0 (Fasi 2–6) + fase 7a (BLE da PWA su Chrome)
-2. **Fase 7b (Capacitor)**: chiedere consenso installazioni — dipendenze previste: `@capacitor/core @capacitor/cli @capacitor/android @capacitor/ios @capacitor-community/bluetooth-le` (+ SDK Android se assente); poi `cap init/add android/ios`
+1. Test utente: firmware 0.3.0 (Fasi 2–6), fase 7a (BLE da PWA su Chrome) e app Android 7b (`npm run cap:android`)
+2. Se OK → **Fase 8** (PWA servita dall'ESP32 via LittleFS + manifest + Service Worker)
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

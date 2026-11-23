@@ -7,13 +7,20 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "tsc -b && vite build && cap sync android",
+    "cap:android": "cap open android",
+    "cap:run-android": "tsc -b && vite build && cap sync android && cap run android"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.4.0",
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

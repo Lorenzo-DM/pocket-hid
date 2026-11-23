@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Connection, type ConnStatus, type DeviceLink } from '../protocol/connection';
-import { BleConnection } from '../protocol/ble_connection';
+import { WebBleLink } from '../protocol/ble_web';
+import { NativeBleLink } from '../protocol/ble_native';
 import { MockConnection } from '../protocol/mock_connection';
 import { isDebugMode, setDebugMode } from '../protocol/debug';
 import type { DeviceInfo } from '../protocol/messages';
@@ -36,7 +38,8 @@ export function useConnection() {
         connRef.current = new MockConnection();
         break;
       case 'ble':
-        connRef.current = new BleConnection();
+        // Web Bluetooth su WebView nativo non c'e': usa il plugin Capacitor
+        connRef.current = Capacitor.isNativePlatform() ? new NativeBleLink() : new WebBleLink();
         break;
       default:
         connRef.current = new Connection();
