@@ -44,7 +44,7 @@ UI OTA/ESP Web Tools (fase 9).
 ## Setup
 
 1. Installare PlatformIO (VS Code extension o `pip install platformio`)
-2. `pio run` per compilare
+2. `pio run` per compilare, `pio run -t uploadfs` per la PWA su LittleFS (fase 8)
 3. Flash sulla porta UART (tenere libera la porta USB-OTG per l'HID)
 4. Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`)
    oppure configurarle dal captive portal senza ricompilare

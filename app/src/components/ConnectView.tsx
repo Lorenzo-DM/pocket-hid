@@ -16,11 +16,20 @@ const MODES: { id: Transport; label: string }[] = [
   { id: 'demo', label: '🐞 Demo' },
 ];
 
+// Se la PWA viene servita DALL'ESP (fase 8: LittleFS), la connessione WS
+// punta allo stesso host; in dev/file:// resta il default mDNS.
+function defaultWsUrl(): string {
+  if (location.protocol.startsWith('http') && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+    return `ws://${location.host}/ws`;
+  }
+  return 'ws://esp32-hid.local/ws';
+}
+
 export function ConnectView({ conn, statusDetail }: Props) {
   // Il tipo di connessione si decide al mount dell'hook: cambiare modalita'
   // persista la scelta e ricarica la pagina.
   const [mode] = useState<Transport>(currentTransport());
-  const [url, setUrl] = useState(() => localStorage.getItem(URL_KEY) ?? 'ws://esp32-hid.local/ws');
+  const [url, setUrl] = useState(() => localStorage.getItem(URL_KEY) ?? defaultWsUrl());
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? '');
 
   const switchMode = (m: Transport) => {
@@ -99,8 +108,13 @@ export function ConnectView({ conn, statusDetail }: Props) {
         <p className="hint">
           Scegli il dispositivo <strong>MK-Remote</strong> nella finestra di pairing
           del browser. Il primo accoppiamento va confermato anche sull'ESP
-          (pairing BLE obbligatorio). Su iOS/Android serve l'app nativa
-          (Capacitor, in arrivo).
+          (pairing BLE obbligatorio). Su iOS serve l'app nativa (Capacitor).
+          {!window.isSecureContext && (
+            <span className="warn">
+              {' '}⚠ Web Bluetooth richiede HTTPS: da pagina servita dall'ESP (http)
+              non è disponibile — usa la tab WiFi o l'app Android.
+            </span>
+          )}
         </p>
       )}
 

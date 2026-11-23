@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fase 7a+7b scritte (BLE Web Bluetooth + Capacitor Android con plugin bluetooth-le); firmware 0.3.0 da ricompilare/testare; app Android da compilare/aprire in Android Studio (l'utente non ha ancora compilato il guscio). Fase 1 verificata su hardware (2025-11-23).
+> Ultimo aggiornamento: fasi 1–8 scritte (ultima: PWA da LittleFS + manifest + SW); firmware 0.3.0 da ricompilare + `uploadfs`; test hardware della parte BLE/app ancora da fare. Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -121,6 +121,13 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Script npm: `cap:sync`, `cap:android` (Android Studio), `cap:run-android`
 - Plugin nota: MTU auto-negoziato lato plugin; conn priority richiesta esplicitamente
 
+### ✅ Fase 8 — PWA servita dall'ESP32 (codice scritto, NON testato)
+- **Firmware**: mount LittleFS + `serveStatic("/", LittleFS, "/").setDefaultFile("index.html")` (dopo le route API); `board_build.filesystem = littlefs` in platformio.ini — i file si caricano con **`pio run -t uploadfs`**
+- **manifest.webmanifest**: standalone, tema scuro, icona SVG (`icon.svg` — Chrome accetta SVG sizes:any); meta apple-touch per iOS
+- **`public/sw.js`** scritto a mano (zero plugin): navigazioni network-first (fallback cache `/index.html`), asset stale-while-revalidate; registrato solo in build PROD → **l'app parte anche offline**
+- **ConnectView**: se la pagina viene servita dall'ESP (http + host non-localhost), il default WS diventa `ws://<host>/ws` automaticamente; warning se si sceglie BLE senza secure context (Web Bluetooth richiede HTTPS)
+- Limiti: da pagina http dell'ESP il tab BLE è disabilitato dal browser (https o app Android per il BLE); OTA mentre la PWA gira dall'ESP: la pagina /update serve comunque (route API prima di serveStatic)
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -142,16 +149,17 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 10. **BLE da nRF Connect**: pairing con `MK-Remote`, hello su RX char → welcome su notify
 11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
+13. **PWA dall'ESP** (fase 8): dopo `pio run -t uploadfs` → aprire `http://esp32-hid.local/` (o IP) → app completa installabile (icona, offline dopo primo load); verifica default WS e warning BLE senza https
+12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 
 ## Roadmap (prossime fasi)
 
 - **Fase 7b+ iOS**: aggiungere `@capacitor/ios` quando l'utente lo chiede (Xcode necessario).
-- **Fase 8**: PWA servita dall'ESP32 (LittleFS) + manifest PWA + Service Worker cache offline.
 - **Fase 9**: Pagina `/flash` su GitHub Pages (HTTPS richiesto da Web Serial) con **ESP Web Tools** (esptool-js) + pubblicazione binari release + OTA WiFi. Nota: Web Serial ❌ su Safari/iOS; documentare porta UART vs OTG.
 - **Deposito**: spostare routing comandi da `ws_server.cpp` a `command_router.cpp` quando arriva il BLE.
 
 ## Prossima azione
 
-1. Test utente: firmware 0.3.0 (Fasi 2–6), fase 7a (BLE da PWA su Chrome) e app Android 7b (`npm run cap:android`)
-2. Se OK → **Fase 8** (PWA servita dall'ESP32 via LittleFS + manifest + Service Worker)
+1. Test utente: firmware 0.3.0 (`pio run` + `pio run -t uploadfs` + flash), Fasi 2–8 end-to-end + app Android
+2. Se OK → **Fase 9** (pagina /flash su GitHub Pages con ESP Web Tools + release binari + OTA WiFi definitiva)
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

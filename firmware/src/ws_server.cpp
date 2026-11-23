@@ -2,6 +2,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include <LittleFS.h>
 #include "config.h"
 #include "usb_hid.h"
 #include "ble_server.h"
@@ -128,6 +129,18 @@ void ws_server_begin(uint16_t port) {
 
   // Portal WiFi (config credenziali + captive portal)
   wifi_portal_routes(server);
+
+  // PWA da LittleFS (fase 8): i file si caricano con `pio run -t uploadfs`.
+  // NB: serveStatic e' un catch-all: va registrato DOPO le route API; le
+  // richieste non trovate restano 404 (niente redirect, il portal usa le
+  // probe registrate in wifi_mgr).
+  if (LittleFS.begin(true)) {
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+    Serial.printf("[ws] LittleFS ok: %u byte usati / %u\n",
+                  (unsigned)LittleFS.usedBytes(), (unsigned)LittleFS.totalBytes());
+  } else {
+    Serial.println("[ws] LittleFS non montato: PWA non servita (uploadfs?)");
+  }
 
   // Endpoint HTTP di diagnostica
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *req) {

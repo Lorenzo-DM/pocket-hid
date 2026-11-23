@@ -1,0 +1,28 @@
+{
+  "name": "MK-Remote",
+  "short_name": "MK-Remote",
+  "description": "Tastiera, mouse e macro remoti via ESP32-HID",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "it",
+  "background_color": "#101216",
+  "theme_color": "#101216",
+  "categories": ["utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
