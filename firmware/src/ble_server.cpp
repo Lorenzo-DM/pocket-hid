@@ -44,7 +44,7 @@ class ServerCb : public NimBLEServerCallbacks {
     server->updateConnParams(info.getConnHandle(), 6, 12, 0, 400);
   }
 
-  void onDisconnect(NimBLEServer*, NimBLEConnInfo&) override {
+  void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
     s_clients = (s_clients > 0) ? s_clients - 1 : 0;
     s_helloDone = false;
     s_rxBuf.clear();
@@ -124,7 +124,7 @@ void ble_server_begin() {
   // TX: notify verso l'app, cifrato
   s_tx = svc->createCharacteristic(
       MK_BLE_TX,
-      NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::NOTIFY_ENC);
+      NIMBLE_PROPERTY::NOTIFY);
 
   // RX: write (con e senza risposta per il mouse fire-and-forget), cifrato
   NimBLECharacteristic* rx = svc->createCharacteristic(

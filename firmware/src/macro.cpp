@@ -64,6 +64,10 @@ String macro_blob(const char* id) {
   return s_prefs.getString(id, "");
 }
 
+void macro_set_on_done(void (*cb)(const char* id)) {
+  s_on_done = cb;
+}
+
 bool macro_save(const char* id, JsonArrayConst steps) {
   if (!s_begun || !valid_id(id)) return false;
   if (steps.isNull() || steps.size() > MACRO_MAX_STEPS) return false;
@@ -127,7 +131,7 @@ static uint32_t s_deadline = 0;
 
 static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
   if (src.size() > MACRO_MAX_STEPS) return false;
-  for (JsonObject o : src) {
+  for (JsonObjectConst o : src) {
     Step st;
     if (!o["k"].isNull()) {
       st.type = Step::KEY;

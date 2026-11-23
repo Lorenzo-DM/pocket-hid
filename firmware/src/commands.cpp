@@ -18,6 +18,8 @@ void commands_set_broadcasters(void (*ws)(const char*), void (*ble)(const char*)
   s_bc_ble = ble;
 }
 
+void on_macro_done(const char* id);
+
 void commands_init() {
   macro_begin();
   macro_set_on_done(on_macro_done);
@@ -168,7 +170,9 @@ void commands_dispatch(const char* t, JsonObject o, void* ctx, ReplyFn reply) {
         JsonDocument d;
         d["t"] = "macro_data";
         d["id"] = id;
-        DeserializationError err = deserializeJson(d["steps"].to<JsonArray>(), macro_blob(id));
+        JsonDocument stepsDoc;
+        DeserializationError err = deserializeJson(stepsDoc, macro_blob(id).c_str());
+        if (!err) d["steps"] = stepsDoc.to<JsonArray>();
         if (!err) {
           String out; serializeJson(d, out); reply(ctx, out.c_str());
           return;
@@ -199,7 +203,7 @@ void commands_dispatch(const char* t, JsonObject o, void* ctx, ReplyFn reply) {
 }
 
 // callback dal player macro (contesto loop): broadcast a tutti i trasporti
-static void on_macro_done(const char* id) {
+void on_macro_done(const char* id) {
   JsonDocument d;
   d["t"] = "macro_done";
   d["id"] = id;
