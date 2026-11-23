@@ -4,9 +4,20 @@ Pagina statica con [ESP Web Tools](https://esphome.github.io/esp-web-tools/)
 (esptool-js): l'utente collega l'ESP32-S3 via USB e installa il firmware
 direttamente da Chrome/Edge, senza installare nulla.
 
-**Requisiti**: HTTPS (GitHub Pages va bene), browser con Web Serial
-(Chrome/Edge desktop; **no Safari/iOS** — per quelli c'è la OTA WiFi `/update`
-sull'ESP o un computer con Chrome).
+**Requisiti**: HTTPS (Web Serial funziona solo su secure context), browser con
+Web Serial (Chrome/Edge desktop; **no Safari/iOS** — per quelli c'è la OTA WiFi
+`/update` sull'ESP o un computer con Chrome).
+
+**Host**: la pagina va
+pubblicata su un qualsiasi host statico HTTPS. Opzioni in ordine di semplicità:
+
+1. **Reverse proxy HTTPS** (es. nginx/caddy): servire la cartella
+   `tools/flash/` come static root. Se il dominio è pubblico e gestito via
+   DNS, Let's Encrypt dà il certificato gratis; in alternativa un certificato
+   della CA interna fidata dal browser.
+2. **GitHub Pages / static Pages**: deploy su
+   branch `pages`), vale la procedura del worktree qui sotto con quel branch.
+3. Qualsiasi hosting statico (anche GitHub Pages, se in futuro).
 
 ## Contenuto
 
@@ -18,7 +29,7 @@ sull'ESP o un computer con Chrome).
 | `bootloader.bin`, `partitions.bin` | build PlatformIO — non committati |
 | `boot_app0.bin` | Arduino core (`~/.platformio/packages/...`) — non committato |
 
-## Aggiornare e pubblicare
+## Aggiornare i binari
 
 ```bash
 # 1. compila il firmware
@@ -26,23 +37,24 @@ cd firmware && pio run -e esp32s3 && cd ..
 
 # 2. copia i binari + rigenera manifest.json con la versione corrente
 tools/make-flash-release.sh
-
-# 3. pubblica su branch gh-pages (la pagina vive in tools/flash/)
-git subtree push --prefix tools/flash origin gh-pages
 ```
 
-Poi in GitHub → Settings → Pages → branch `gh-pages`, root.
-URL finale: `https://<utente>.github.io/<repo>/`.
-
-> Nota: `git subtree push` richiede che i binari siano **committati** su
-> `main` (sono gitignored): per la pubblicazione vanno aggiunti forzatamente
-> o usata una worktree. Alternativa semplice: copiare `tools/flash/` in una
-> cartella di lavoro separata e pusharla manualmente sul branch `gh-pages`:
+## Pubblicare (reverse proxy statico)
 
 ```bash
-git worktree add ../mk-pages gh-pages 2>/dev/null || git worktree add --orphan ../mk-pages gh-pages
+# sincronizza la cartella sul server che la serve in HTTPS
+rsync -av tools/flash/ server:/var/www/mk-remote/flash/
+```
+
+## Pubblicare (branch `pages`, se l'istanza lo supporta)
+
+I binari sono gitignored su `main`: per il branch di pubblicazione usare una
+worktree e aggiungerli lì:
+
+```bash
+git worktree add ../mk-pages pages 2>/dev/null || git worktree add --orphan ../mk-pages pages
 cp tools/flash/* ../mk-pages/
-cd ../mk-pages && git add -A && git commit -m "flash page update" && git push origin gh-pages
+cd ../mk-pages && git add -A && git commit -m "flash page update" && git push origin pages
 ```
 
 ## OTA WiFi (aggiornamenti successivi)

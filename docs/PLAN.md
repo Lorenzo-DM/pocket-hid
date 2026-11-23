@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: **tutte le 9 fasi scritte** (ultima: pagina /flash con ESP Web Tools + script binari); da fare: test utente completi + pubblicazione GitHub Pages. Fase 1 verificata su hardware (2025-11-23).
+> Ultimo aggiornamento: **tutte le 9 fasi scritte**; da fare: test utente completi + hosting pagina flash. Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -132,7 +132,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - `tools/flash/index.html`: pagina statica con **ESP Web Tools** (esptool-js via CDN unpkg, zero build) — installazione firmware da Chrome/Edge su HTTPS; nota compat: **Web Serial ❌ Safari/iOS** (per quelli: OTA `/update` o PC con Chrome); procedura download-mode per board single-USB + replug post-flash
 - `tools/flash/manifest.json`: parti flash con offset S3 (bootloader@0x0, partitions@0x8000, boot_app0@0xe000, app@0x10000); **rigenerato dallo script** con la versione
 - `tools/make-flash-release.sh`: copia i binari dalla build PlatformIO (+ boot_app0 dal core Arduino) e scrive il manifest con la versione di config.h; i bin sono gitignored (rigenerabili)
-- `tools/flash/README.md`: pubblicazione gh-pages (subtree/worktree) + OTA WiFi documentata
+- `tools/flash/README.md`: hosting della pagina (GitHub Pages / hosting statico HTTPS) + OTA WiFi documentata
 - README.md root aggiornato (struttura, installazione, stato)
 
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
@@ -157,7 +157,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 13. **PWA dall'ESP** (fase 8): dopo `pio run -t uploadfs` → aprire `http://esp32-hid.local/` (o IP) → app completa installabile (icona, offline dopo primo load); verifica default WS e warning BLE senza https
-14. **Pagina /flash** (fase 9): `pio run -e esp32s3` + `tools/make-flash-release.sh` → prova pagina da file:// no (serve HTTPS) → pubblicare gh-pages v. `tools/flash/README.md` → installazione firmware da Chrome con ESP Web Tools
+14. **Pagina /flash** (fase 9): `pio run -e esp32s3` + `tools/make-flash-release.sh` → pubblicare su host statico HTTPS (v. `tools/flash/README.md`) → installazione firmware da Chrome con ESP Web Tools
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 
 ## Roadmap (prossime fasi)
@@ -166,7 +166,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - **Deposito chiuso**: il routing comandi è già estratto in `commands.cpp` (fase 6), condiviso WS/BLE.
 
 ## Roadmap post-v1 (eventuali)
-- Release binari firmate e tag GitHub (workflow CI opzionale)
+- Release binari firmate e tag (workflow CI opzionale)
 - Layout IT + unicode a run-length per `text` (v. limiti fase 1)
 - Client multipli simultanei (oggi un client authed per trasporto)
 - Test unitari dell'app (Vitest) e del keymap
@@ -174,5 +174,5 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 ## Prossima azione
 
 1. Test utente completi (lista qui sopra: firmware, portal, BLE, Android, PWA, pagina flash)
-2. Pubblicare la pagina flash su GitHub Pages (v. `tools/flash/README.md`)
+2. Pubblicare la pagina flash su un host statico HTTPS (v. `tools/flash/README.md`)
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

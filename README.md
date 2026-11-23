@@ -27,7 +27,7 @@ docs/       protocol.md (fonte di verità) · architecture.md · troubleshooting
 
 ## Installazione firmware
 
-1. **Dal browser** (consigliato): pagina `/flash` su GitHub Pages con ESP Web Tools — v. [tools/flash](tools/flash/)
+1. **Dal browser** (consigliato): pagina `/flash` con ESP Web Tools su un host statico HTTPS — v. [tools/flash](tools/flash/)
 2. **PlatformIO**: `pio run -e esp32s3` + flash porta UART + `pio run -t uploadfs` per la PWA
 3. **OTA WiFi**: `http://<ip-esp>/update` per gli aggiornamenti successivi
 
