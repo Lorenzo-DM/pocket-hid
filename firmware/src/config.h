@@ -7,7 +7,7 @@
 #include "config_local.h"
 #endif
 
-#define MK_FW_VERSION "0.1.0"
+#define MK_FW_VERSION "0.2.0"
 #define MK_HOSTNAME   "esp32-hid"
 #define MK_MDNS_NAME  "esp32-hid"
 #define MK_WS_PORT    80

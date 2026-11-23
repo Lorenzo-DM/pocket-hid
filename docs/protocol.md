@@ -30,9 +30,30 @@ ESP  ->  { "t": "welcome", "v": 1, "fw": "0.1.0", "layout": "it",
 | `mouse` | `dx`, `dy` | movimento relativo, int16 |
 | `mbtn` | `b`, `act` | `b`: 0=left 1=right 2=middle; `act`: `d`/`u`/`c` |
 | `scroll` | `dx`, `dy` | due dita sul trackpad |
-| `macro_run` | `id` | macro salvata nell'ESP (NVS) |
-| `macro_save` | `id`, `steps` | salva/aggiorna macro (steps = array di eventi + delay ms) |
-| `macro_del` | `id` | elimina macro |
+| `macro_run` | `id` | esegue una macro salvata nell'ESP (NVS); risposta `macro_done` a fine esecuzione |
+| `macro_save` | `id`, `steps` | salva/aggiorna macro; a successo risponde con uno `state` (lista aggiornata) |
+| `macro_del` | `id` | elimina macro; a successo risponde con uno `state` |
+| `macro_get` | `id` | richiede il contenuto; risposta `macro_data` |
+
+#### Formato step macro
+
+`steps` è un array di oggetti, ciascuno con UNA delle chiavi seguenti:
+
+| Step | Campi | Significato |
+|---|---|---|
+| Tasto | `k`, [`m`] | tap del keycode HID 0x07 con modificatori (stesso bitmask di `key`) |
+| Testo | `s` | stringa digitata (limiti del firmware: ASCII, layout corrente) |
+| Media | `c` | codice consumer 0x0C |
+| Attesa | `w` | pausa in ms (max 60000) |
+
+Esempio:
+```json
+{ "t": "macro_save", "id": "netflix",
+  "steps": [ {"s":"netflix.com"}, {"k":0x28}, {"w":2000}, {"c":0xcd} ] }
+```
+
+Limiti firmware: id `[a-zA-Z0-9_-]` 1–20 char, max 12 macro, max 64 step, blob ≤ 2 KB.
+Al termine dell'esecuzione l'ESP invia `{"t":"macro_done","id":"..."}`.
 | `state` | — | richiede diagnostica |
 
 ### Bitmask modificatori (`mods`)
@@ -53,6 +74,7 @@ Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
 | `usb_state` | `st` | `mounted` / `unmounted` — l'ESP sa se il target lo vede |
 | `ble_state` | `n` | numero central connesse |
 | `macro_done` | `id` | conferma esecuzione macro |
+| `macro_data` | `id`, `steps` | contenuto di una macro (risposta a `macro_get`) |
 | `error` | `msg` | messaggio leggibile per la UI |
 
 ## 4. Keycode di riferimento (HID Usage ID)

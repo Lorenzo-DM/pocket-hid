@@ -6,6 +6,7 @@
 #include "config.h"
 #include "usb_hid.h"
 #include "ws_server.h"
+#include "macro.h"
 
 static uint32_t s_lastWifiAttempt = 0;
 static bool s_mdnsStarted = false;
@@ -40,6 +41,7 @@ void loop() {
   TinyUSBDevice.task();
 #endif
   ws_server_loop();
+  macro_tick(); // player macro non-bloccante
 
   if (WiFi.status() == WL_CONNECTED) {
     if (!s_mdnsStarted) {

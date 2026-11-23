@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 3–4 scritte (trackpad, speciali estesi + media keys) + modalità debug/demo; in attesa di test utente. Fase 1 verificata su hardware reale (2025-11-23).
+> Ultimo aggiornamento: fasi 3–5 scritte (trackpad, speciali/media, macro full-stack) + modalità debug/demo; firmware da ricompilare e testare. Fase 1 verificata su hardware reale (2025-11-23).
 
 ## Obiettivo
 
@@ -66,6 +66,21 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - `MediaView` (nuova tab "Media"): volume ± e luminosità ± con **ripetizione a 350ms tenendo premuto**, mute, prev/play/next, stop, power (stile danger)
 - Nota: CapsLock è un tap; lo stato LED del target non è noto all'app (nessun campo nel welcome)
 
+### ✅ Fase 5 — Macro (codice scritto, NON compilato né testato)
+**Firmware** (`firmware/src/macro.h/.cpp`, fw 0.2.0):
+- Persistenza NVS (Preferences, namespace `mkmac`): blob JSON degli step sotto chiave = id; indice id in chiave `__idx` (la lib non espone enumerazione chiavi)
+- Limiti: 12 macro, id `[a-zA-Z0-9_-]` 1–20 char, 64 step, blob ≤ 2 KB, attesa max 60s
+- **Player non-bloccante**: `macro_tick()` da `loop()`, micro-fasi (down→8ms→up→8ms, testo char-per-char 6ms, consumer, wait) con deadline su `millis()` — WS e USB restano reattivi
+- Tap macro usa report HID diretti (non lo stato 6KRO del ws_server)
+- Router WS: `macro_save`/`macro_del` rispondono con uno `state` (lista aggiornata, fa da ack); `macro_run` → `macro_done` broadcast a fine esecuzione; `macro_get` → `macro_data` (contenuto, per edit)
+- Protocollo aggiornato: "Formato step macro" in docs/protocol.md (`k`/`s`/`c`/`w`)
+
+**App**:
+- `MacroView` (nuova tab "Macro"): lista con ▶/✎/🗑, editor step (Tasto+mods, Testo, Media, Attesa) con riordino e rimozione, salvataggio su ESP
+- Modifica macro esistente: scarica il contenuto via `macro_get`→`macro_data` (nuovo messaggio in protocollo)
+- `connection.ts`: sottoscrizione `onMessage()` per messaggi dedicati (macro_data/macro_done)
+- Mock: simula save/del (aggiorna lista nello state), run (macro_done dopo 800ms), get (step vuoti)
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -75,16 +90,16 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - Attivazione rapida: anche query param futuro `?debug` (ora solo toggle UI)
 
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
-1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le 4 tab usabili, badge DEMO, log messaggi col pulsante 🐞
-2. PlatformIO → flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"` sul target
+1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le 5 tab usabili, badge DEMO, log messaggi col pulsante 🐞 (provare anche tab Macro: save/run/del simulati)
+2. **Ricompilare firmware** (fase 5: `pio run -e esp32s3`) — al primo avvio della fase verificare che NVS non svuoti credenziali WiFi (Preferences usa una partizione dedicata, non deve toccare quelle compilate) — poi flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"`, fw `0.2.0`
 3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
 5. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
 6. Tab Tastiera: riga speciale (Stamp, Home, PgSu/PgGiu, Caps…) e tab Media (volume con repeat, play, power)
+7. Tab Macro: crea una macro (es. testo+invio+attesa+play), salva, esegui sul target, verifica che WS resti reattivo durante l'esecuzione, poi elimina
 
 ## Roadmap (prossime fasi)
 
-- **Fase 5**: Macro — editor UI, runtime sul firmware, persistenza NVS, elenco nel welcome, `macro_save/del/run`.
 - **Fase 6**: BLE GATT custom (NimBLE: RX/TX chars, pairing, interval 7.5–15ms, chunking MTU) + hotspot AP+STA con captive portal → **espansa**: anche config portal per WiFi in NVS (sostituisce credenziali compilate) + preparazione OTA.
 - **Fase 7**: Guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + Web Bluetooth nella PWA.
 - **Fase 8**: PWA servita dall'ESP32 (LittleFS) + manifest PWA + Service Worker cache offline.
@@ -93,6 +108,6 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Prossima azione
 
-1. Test utente: Fasi 2–4 in modalità debug (senza ESP) e poi end-to-end con firmware reale
-2. Se OK → iniziare **Fase 5 (macro: editor UI, runtime firmware, NVS)**
+1. Test utente: modalità debug (senza ESP) e poi ricompila/flasha il firmware 0.2.0 e testa Fasi 2–5 end-to-end
+2. Se OK → iniziare **Fase 6 (BLE GATT + hotspot AP+STA + config portal NVS + prep OTA)**
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

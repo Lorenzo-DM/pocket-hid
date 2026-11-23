@@ -318,6 +318,87 @@ button.key.mod.active {
   color: var(--muted);
 }
 
+/* --- Macro --- */
+
+.macro {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.macro-list, .macro-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.macro-item, .macro-steps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid #2a2f38;
+  border-radius: 8px;
+}
+
+.macro-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.macro-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.macro-btn {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 0 10px;
+}
+.macro-btn.danger { color: var(--danger); }
+
+.macro-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.macro-add select, .macro-add input {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #333a45;
+  background: var(--panel);
+  color: var(--text);
+}
+.macro-add input { flex: 1; min-width: 120px; }
+.macro-mods { display: flex; gap: 4px; }
+.macro-mods .key { min-height: 36px; padding: 0 8px; font-size: 0.8rem; }
+
+.macro-editor {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.macro-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+.macro-editor input[type="text"], .macro-editor input[type="number"] {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #333a45;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.macro-editor-actions { display: flex; gap: 10px; }
+.macro-editor-actions .primary { flex: 1; }
+
 /* --- Testo --- */
 
 .textview {

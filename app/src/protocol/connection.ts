@@ -26,6 +26,9 @@ export interface DeviceLink {
   connect(url: string, token?: string): void;
   disconnect(): void;
   send(msg: OutMsg): boolean;
+  // sottoscrizione a tutti i messaggi in ingresso (per feature che gestiscono
+  // messaggi dedicati, es. macro_data/macro_done); ritorna l'unsubscribe
+  onMessage?(fn: (msg: InMsg) => void): () => void;
 }
 
 const HELLO_TIMEOUT_MS = 4000;
@@ -42,6 +45,13 @@ export class Connection {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private helloTimer: ReturnType<typeof setTimeout> | null = null;
   private cb: ConnectionCallbacks = {};
+  private msgListeners = new Set<(msg: InMsg) => void>();
+
+  // sottoscrizione ai messaggi in ingresso (es. per macro_data/macro_done)
+  onMessage(fn: (msg: InMsg) => void): () => void {
+    this.msgListeners.add(fn);
+    return () => this.msgListeners.delete(fn);
+  }
 
   setCallbacks(cb: ConnectionCallbacks) {
     this.cb = cb;
@@ -113,6 +123,7 @@ export class Connection {
   }
 
   private handleIn(msg: InMsg) {
+    this.msgListeners.forEach((fn) => fn(msg));
     switch (msg.t) {
       case 'welcome':
       case 'state': {

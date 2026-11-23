@@ -4,6 +4,7 @@
 #include "config.h"
 #include "usb_hid.h"
 #include "keymap.h"
+#include "macro.h"
 
 static AsyncWebServer server(MK_WS_PORT);
 static AsyncWebSocket ws("/ws");
@@ -68,7 +69,8 @@ static void send_status(AsyncWebSocketClient *client, const char* type) {
   d["layout"] = "us"; // layout IT/US completo in fase successiva
   d["usb"] = usb_hid_mounted() ? "mounted" : "unmounted";
   d["ble"] = 0;
-  d["macros"].to<JsonArray>(); // vuota in questa fase
+  JsonArray macros = d["macros"].to<JsonArray>();
+  macro_fill_ids(macros);
   send_doc(client, d);
 }
 
@@ -135,6 +137,67 @@ static void handle_scroll(JsonObject o) {
   mouse_scroll((int8_t)dx, (int8_t)dy);
 }
 
+// --- Macro (runtime in macro.cpp, player non-bloccante su loop()) ---
+
+static void handle_macro_save(AsyncWebSocketClient *client, JsonObject o) {
+  const char* id = o["id"] | "";
+  if (!macro_save(id, o["steps"].as<JsonArray>())) {
+    send_error(client, "macro non salvata (id o steps non validi, o limiti superati)");
+    return;
+  }
+  // lo state contiene la lista macro aggiornata: fa da ack
+  send_status(client, "state");
+}
+
+static void handle_macro_del(AsyncWebSocketClient *client, JsonObject o) {
+  const char* id = o["id"] | "";
+  if (!macro_del(id)) {
+    send_error(client, "macro non eliminata (id non valido o inesistente)");
+    return;
+  }
+  send_status(client, "state");
+}
+
+static void handle_macro_run(AsyncWebSocketClient *client, JsonObject o) {
+  const char* id = o["id"] | "";
+  if (macro_running()) {
+    send_error(client, "macro gia' in esecuzione");
+    return;
+  }
+  if (!macro_start(id)) {
+    send_error(client, "macro inesistente o non avviabile");
+  }
+  // a fine esecuzione arrivera' macro_done (broadcast)
+}
+
+static void handle_macro_get(AsyncWebSocketClient *client, JsonObject o) {
+  const char* id = o["id"] | "";
+  if (!macro_exists(id)) {
+    send_error(client, "macro inesistente");
+    return;
+  }
+  String blob = macro_blob(id);
+  JsonDocument d;
+  d["t"] = "macro_data";
+  d["id"] = id;
+  DeserializationError err = deserializeJson(d["steps"].to<JsonArray>(), blob);
+  if (err) {
+    send_error(client, "macro corrotta in NVS");
+    return;
+  }
+  send_doc(client, d);
+}
+
+// callback dal player (contesto loop): broadcast a tutti i client
+static void on_macro_done(const char* id) {
+  JsonDocument d;
+  d["t"] = "macro_done";
+  d["id"] = id;
+  String out;
+  serializeJson(d, out);
+  ws.textAll(out);
+}
+
 static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
   JsonDocument doc;
   if (deserializeJson(doc, data, len)) {
@@ -175,8 +238,11 @@ static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t l
   else if (!strcmp(t, "mouse"))    handle_mouse(doc.as<JsonObject>());
   else if (!strcmp(t, "mbtn"))     handle_mbtn(doc.as<JsonObject>());
   else if (!strcmp(t, "scroll"))   handle_scroll(doc.as<JsonObject>());
-  else if (!strcmp(t, "state"))    send_status(client, "state");
-  else if (!strcmp(t, "macro_run")) send_error(client, "macro non ancora supportate");
+  else if (!strcmp(t, "state"))     send_status(client, "state");
+  else if (!strcmp(t, "macro_run"))  handle_macro_run(client, doc.as<JsonObject>());
+  else if (!strcmp(t, "macro_save")) handle_macro_save(client, doc.as<JsonObject>());
+  else if (!strcmp(t, "macro_del"))  handle_macro_del(client, doc.as<JsonObject>());
+  else if (!strcmp(t, "macro_get"))  handle_macro_get(client, doc.as<JsonObject>());
   else send_error(client, "tipo messaggio sconosciuto");
 }
 
@@ -204,6 +270,9 @@ static void on_ws_event(AsyncWebSocket *server, AsyncWebSocketClient *client,
 }
 
 void ws_server_begin(uint16_t port) {
+  macro_begin();
+  macro_set_on_done(on_macro_done);
+
   ws.onEvent(on_ws_event);
   server.addHandler(&ws);
 
