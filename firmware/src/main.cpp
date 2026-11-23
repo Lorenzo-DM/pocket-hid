@@ -6,7 +6,9 @@
 #include "config.h"
 #include "usb_hid.h"
 #include "ws_server.h"
-#include "macro.h"
+#include "ble_server.h"
+#include "wifi_mgr.h"
+#include "commands.h"
 
 static uint32_t s_lastWifiAttempt = 0;
 static bool s_mdnsStarted = false;
@@ -26,11 +28,11 @@ void setup() {
   Serial.printf("\n[main] MK-Remote firmware %s\n", MK_FW_VERSION);
   Serial.printf("[main] USB HID init, mounted=%d\n", usb_hid_mounted());
 
-  // WiFi in modalità station (rete di casa)
-  // La modalità hotspot/AP e il captive portal arrivano in una fase successiva.
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(MK_HOSTNAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  // WiFi: STA con credenziali NVS (config portal) o compilata + AP captive portal
+  wifi_begin();
+
+  // BLE GATT custom (pairing obbligatorio)
+  ble_server_begin();
 
   ws_server_begin(MK_WS_PORT);
   Serial.printf("[main] WebSocket server su porta %d\n", MK_WS_PORT);
@@ -41,7 +43,8 @@ void loop() {
   TinyUSBDevice.task();
 #endif
   ws_server_loop();
-  macro_tick(); // player macro non-bloccante
+  wifi_loop();     // DNS captive portal + riavvio post-config
+  commands_tick(); // player macro
 
   if (WiFi.status() == WL_CONNECTED) {
     if (!s_mdnsStarted) {
@@ -59,7 +62,7 @@ void loop() {
       s_lastWifiAttempt = now;
       Serial.printf("[main] WiFi non connesso, riprovo...\n");
       WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
+      WiFi.begin(); // riprende le credenziali gia' impostate
     }
   }
 

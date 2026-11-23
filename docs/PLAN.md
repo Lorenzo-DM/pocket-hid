@@ -1,7 +1,7 @@
 # MK-Remote — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
-> Ultimo aggiornamento: fasi 3–5 scritte (trackpad, speciali/media, macro full-stack) + modalità debug/demo; firmware da ricompilare e testare. Fase 1 verificata su hardware reale (2025-11-23).
+> Ultimo aggiornamento: fasi 3–6 scritte (trackpad, speciali/media, macro, BLE+portal+OTA) + modalità debug/demo; **firmware 0.3.0 da ricompilare e testare** (non compilato in sessione). Fase 1 verificata su hardware (2025-11-23).
 
 ## Obiettivo
 
@@ -81,6 +81,30 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - `connection.ts`: sottoscrizione `onMessage()` per messaggi dedicati (macro_data/macro_done)
 - Mock: simula save/del (aggiorna lista nello state), run (macro_done dopo 800ms), get (step vuoti)
 
+### ✅ Fase 6 — BLE + portal + OTA (codice scritto, NON compilato né testato)
+**Refactor**:
+- **`commands.cpp/.h`**: routing comandi estratto da `ws_server` (stato 6KRO, handler, costruzione status) — condiviso da WS e BLE (come previsto in "Deposito")
+
+**BLE GATT** (`ble_server.cpp`, NimBLE-Arduino 2.x — richiede core 3.x):
+- Servizio `7a0c1000-…`, RX `…1001` (write+writeNR, ENC), TX `…1002` (notify, ENC) → **pairing obbligatorio** via cifratura
+- Pairing "Just Works" (bonding+SC, IO none); handshake hello richiesto dopo ogni (ri)connessione, senza token
+- Conn interval richiesto 7.5–15ms; MTU 247; JSON multi-write accumulato (buffer 1KB, overflow → errore+reset)
+- `ble_server_broadcast()` per `macro_done`; welcome/state riportano `ble` = client connessi
+
+**WiFi/portal** (`wifi_mgr.cpp`):
+- Credenziali in NVS (`mkcfg`: ssid/pass), **priorità su quelle compilate** (fallback iniziale)
+- AP+STA sempre attivo: SSID `MK-Remote-XXXX`, WPA2 `MK_AP_PASS` (config.h)
+- Captive portal: DNS wildcard + probe redirect; pagina config `/` con form → `POST /save` → NVS → auto-reboot
+- `GET /wifi-info` diagnostica
+
+**OTA (preparazione)**:
+- Partizioni `min_spiffs.csv` (due slot app, NVS invariata a 0x9000)
+- `GET /update` form upload + `POST /update` multipart con `Update.h` → flash + reboot (UI definitiva in fase 9)
+
+**platformio.ini**: aggiunto `h2zero/NimBLE-Arduino@^2.2.0` (+ nota per core 2.x → ~1.4.3); partizioni min_spiffs
+
+**App**: nessuna modifica (il client BLE arriva in fase 7); mock e PWA invariati
+
 ### ✅ Modalità debug/demo (trasversale, fuori roadmap)
 - Interfaccia `DeviceLink` in `connection.ts`: l'app non sa se parla col WS reale o col mock
 - `app/src/protocol/mock_connection.ts`: simula handshake (connecting→authing→ready), welcome fittizio, risponde a heartbeat `state`; logga ogni messaggio
@@ -91,16 +115,18 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
 1. **Modalità debug** (nessun hardware): schermata connessione → "🐞 modalità debug" → "Entra in demo" → tutte le 5 tab usabili, badge DEMO, log messaggi col pulsante 🐞 (provare anche tab Macro: save/run/del simulati)
-2. **Ricompilare firmware** (fase 5: `pio run -e esp32s3`) — al primo avvio della fase verificare che NVS non svuoti credenziali WiFi (Preferences usa una partizione dedicata, non deve toccare quelle compilate) — poi flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"`, fw `0.2.0`
+2. **Ricompilare firmware 0.3.0** (`pio run -e esp32s3`): ⚠️ scaricherà NimBLE-Arduino; ⚠️ cambia partizioni (min_spiffs) → verificare che NVS/credenziali sopravvivano; poi flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"`
 3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
 5. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
 6. Tab Tastiera: riga speciale (Stamp, Home, PgSu/PgGiu, Caps…) e tab Media (volume con repeat, play, power)
 7. Tab Macro: crea una macro (es. testo+invio+attesa+play), salva, esegui sul target, verifica che WS resti reattivo durante l'esecuzione, poi elimina
+8. **Captive portal**: connettersi all'AP `MK-Remote-XXXX` (pass in config.h) → apre la config page → salvare credenziali → riavvio → si riconnette alla rete
+9. **BLE**: dall'app nRF Connect (o Chrome Web Bluetooth quando ci sarà la fase 7): pairing con `MK-Remote`, hello su RX char → welcome su notify
+10. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 
 ## Roadmap (prossime fasi)
 
-- **Fase 6**: BLE GATT custom (NimBLE: RX/TX chars, pairing, interval 7.5–15ms, chunking MTU) + hotspot AP+STA con captive portal → **espansa**: anche config portal per WiFi in NVS (sostituisce credenziali compilate) + preparazione OTA.
 - **Fase 7**: Guscio Capacitor (iOS/Android) + `@capacitor-community/bluetooth-le` + Web Bluetooth nella PWA.
 - **Fase 8**: PWA servita dall'ESP32 (LittleFS) + manifest PWA + Service Worker cache offline.
 - **Fase 9**: Pagina `/flash` su GitHub Pages (HTTPS richiesto da Web Serial) con **ESP Web Tools** (esptool-js) + pubblicazione binari release + OTA WiFi. Nota: Web Serial ❌ su Safari/iOS; documentare porta UART vs OTG.
@@ -108,6 +134,6 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ## Prossima azione
 
-1. Test utente: modalità debug (senza ESP) e poi ricompila/flasha il firmware 0.2.0 e testa Fasi 2–5 end-to-end
-2. Se OK → iniziare **Fase 6 (BLE GATT + hotspot AP+STA + config portal NVS + prep OTA)**
+1. Test utente: ricompila/flasha firmware 0.3.0 (prima di tutto: NimBLE scaricato, partizioni cambiate) e testa Fasi 2–6 end-to-end
+2. Se OK → iniziare **Fase 7 (guscio Capacitor + client BLE Web Bluetooth/@capacitor-community/bluetooth-le)**
 3. Quando si ricompila con toolchain fresh, ricontrollare `CFG_TUD_HID=3` in `.pio/libdeps/.../tusb_config_esp32.h`

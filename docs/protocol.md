@@ -117,22 +117,40 @@ Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
 
 ## 5. Trasporto BLE GATT
 
-- **Servizio**: UUID 128-bit custom (fingerprint per lo scan dell'app)
-- **RX char** (app → ESP): write. Senza risposta per `mouse` (fire-and-forget), con risposta per il resto
-- **TX char** (ESP → app): notify
-- **MTU**: negoziare il massimo; chunking con `i`/`n` oltre il limite
+- **Servizio** (`MK_BLE_SVC`): `7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f`
+- **RX char** (app → ESP): `7a0c1001-…` — write e write-without-response (per `mouse` fire-and-forget), **richiede cifratura** (il pairing avviene prima di ogni write)
+- **TX char** (ESP → app): `7a0c1002-…` — notify, cifrata
+- **Device name**: `MK-Remote`; lo scan dell'app filtra per presence del service UUID
+- **MTU**: richiesto 247; messaggi JSON > MTU: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 1KB, overflow → errore e reset)
 - **Connection interval**: richiesto 7.5–15ms per mouse fluido
-- **Sicurezza**: pairing/bonding obbligatorio prima di accettare write
+- **Sicurezza**: pairing/bonding obbligatorio (flag ENC sulle characteristic); l'handshake `hello` resta identico ma senza token (il pairing fa da auth)
+- **Doppio hello**: su ogni riconnessione serve un nuovo `hello`
 
-## 6. Trasporto WebSocket
+## 6. Trasporti di rete (WebSocket / portal)
 
-- Endpoint: `ws://<ip>:<porta>`
+### WebSocket
+
+- Endpoint: `ws://<ip>:80/ws`
 - **Auth**: l'ESP attende `hello`+token valido entro timeout, altrimenti chiude
-- **Heartbeat**: ping/pong ogni ~5s; riconnessione app con backoff esponenziale
-- **Scoperta**: mDNS `esp32-hid.local` su rete di casa; IP fisso / captive portal sull'hotspot ESP
+- **Heartbeat**: `{t:"state"}` ogni ~15s dall'app; riconnessione con backoff esponenziale
+- **Scoperta**: mDNS `esp32-hid.local` su rete di casa
+
+### Hotspot AP + captive portal + config WiFi
+
+- L'ESP avvia sempre un AP: SSID `MK-Remote-XXXX` (ultimi byte MAC), WPA2 (pass compilato, `MK_AP_PASS`)
+- Connessione all'AP → captive portal → pagina di configurazione (`/`)
+- `POST /save` (`ssid`, `pass` form-urlencoded) → salva in NVS → riavvio automatico
+- `GET /wifi-info` → `{sta_ssid, sta_connected, ip, ap_ssid}`
+- Probe captive reindirizzate al portal (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, `/ncsi.txt`, `/fwlink`)
+- Le credenziali NVS hanno priorità su quelle compilate in `config_local.h` (che restano il fallback iniziale)
+
+### OTA
+
+- `GET /update` → form upload; `POST /update` (multipart, campo `bin`) → flash e riavvio
+- Partizioni `min_spiffs` (due slot app); UI definitiva in fase 9
 
 ## 7. Convenzioni trasversali
 
-- **Coalescing mouse**: l'app genera `mouse` a ~60Hz; su BLE può batchare tra un interval e l'altro. Il firmware somma i delta.
+- **Coalescing mouse**: l'app genera `mouse` a ~60Hz; su BLE può batchare tra un interval e l'altro. Il firmware somma i delta (int8 per report: oltre ±127 l'app spezza tra i frame).
 - **Macro**: salvate nell'ESP (NVS), elenco nel `welcome`; editor nell'app, sync via `macro_save`/`macro_del`.
 - **Modi di invio testo**: `text` gestisce maiuscole, accenti e caratteri speciali secondo `layout` (IT/US).

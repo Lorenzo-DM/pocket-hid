@@ -1,57 +1,18 @@
 #include "ws_server.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <Update.h>
 #include "config.h"
 #include "usb_hid.h"
-#include "keymap.h"
-#include "macro.h"
+#include "ble_server.h"
+#include "wifi_mgr.h"
+#include "commands.h"
 
 static AsyncWebServer server(MK_WS_PORT);
 static AsyncWebSocket ws("/ws");
 
 // In questa fase: un client "autenticato" alla volta
 static bool s_authed = false;
-
-// --- Stato tastiera (6-key rollover) ---
-static uint8_t s_mods = 0;
-static uint8_t s_keys[6] = {0};
-
-static int find_key(uint8_t code) {
-  for (int i = 0; i < 6; i++) if (s_keys[i] == code) return i;
-  return -1;
-}
-
-static bool kb_apply() {
-  return kb_send(s_mods, s_keys);
-}
-
-static bool kb_key_down(uint8_t code, uint8_t mods) {
-  if (code == 0) return false;
-  if (find_key(code) < 0) {
-    int slot = -1;
-    for (int i = 0; i < 6; i++) if (s_keys[i] == 0) { slot = i; break; }
-    if (slot < 0) return false; // 7° tasto: ignorato (6KRO)
-    s_keys[slot] = code;
-  }
-  s_mods |= (mods & 0x0F);
-  return kb_apply();
-}
-
-static bool kb_key_up(uint8_t code, uint8_t mods) {
-  if (code != 0) {
-    int i = find_key(code);
-    if (i >= 0) s_keys[i] = 0;
-  }
-  s_mods &= ~(mods & 0x0F);
-  return kb_apply();
-}
-
-static bool kb_key_tap(uint8_t code, uint8_t mods) {
-  kb_key_down(code, mods);
-  delay(8);
-  kb_key_up(code, mods);
-  return true;
-}
 
 // --- Utility JSON ---
 
@@ -61,19 +22,6 @@ static void send_doc(AsyncWebSocketClient *client, JsonDocument &d) {
   client->text(out);
 }
 
-static void send_status(AsyncWebSocketClient *client, const char* type) {
-  JsonDocument d;
-  d["t"] = type;
-  d["v"] = 1;
-  d["fw"] = MK_FW_VERSION;
-  d["layout"] = "us"; // layout IT/US completo in fase successiva
-  d["usb"] = usb_hid_mounted() ? "mounted" : "unmounted";
-  d["ble"] = 0;
-  JsonArray macros = d["macros"].to<JsonArray>();
-  macro_fill_ids(macros);
-  send_doc(client, d);
-}
-
 static void send_error(AsyncWebSocketClient *client, const char* msg) {
   JsonDocument d;
   d["t"] = "error";
@@ -81,122 +29,18 @@ static void send_error(AsyncWebSocketClient *client, const char* msg) {
   send_doc(client, d);
 }
 
-// --- Handler comandi (schema: docs/protocol.md) ---
-
-static void handle_key(JsonObject o) {
-  uint8_t code = o["code"] | 0;
-  uint8_t mods = o["mods"] | 0;
-  const char* act = o["act"] | "t";
-
-  if      (!strcmp(act, "d")) kb_key_down(code, mods);
-  else if (!strcmp(act, "u")) kb_key_up(code, mods);
-  else                        kb_key_tap(code, mods);
+// reply verso il client sorgente (sink per commands_dispatch)
+static void reply_ws(void* ctx, const char* json) {
+  auto* client = (AsyncWebSocketClient*)ctx;
+  if (client) client->text(json);
 }
 
-static void handle_text(const char* s) {
-  if (!s) return;
-  for (const char* p = s; *p; ++p) {
-    uint8_t usage;
-    bool shift;
-    if (!keymap_char(*p, &usage, &shift)) continue;
-    kb_key_tap(usage, shift ? 0x02 : 0);
-    delay(6);
-  }
+// broadcast a tutti i client WS (macro_done e simili)
+static void broadcast_ws(const char* json) {
+  ws.textAll(json);
 }
 
-static void handle_consumer(JsonObject o) {
-  uint16_t code = o["code"] | 0;
-  if (code) consumer_send(code);
-}
-
-static void handle_mouse(JsonObject o) {
-  int dx = o["dx"] | 0;
-  int dy = o["dy"] | 0;
-  if (dx > 127) dx = 127; if (dx < -127) dx = -127;
-  if (dy > 127) dy = 127; if (dy < -127) dy = -127;
-  mouse_move((int8_t)dx, (int8_t)dy);
-}
-
-static void handle_mbtn(JsonObject o) {
-  uint8_t b = o["b"] | 0;
-  const char* act = o["act"] | "c";
-  if      (!strcmp(act, "d")) mouse_button(b, true);
-  else if (!strcmp(act, "u")) mouse_button(b, false);
-  else { // click = down + up
-    mouse_button(b, true);
-    delay(10);
-    mouse_button(b, false);
-  }
-}
-
-static void handle_scroll(JsonObject o) {
-  int dx = o["dx"] | 0;
-  int dy = o["dy"] | 0;
-  if (dx > 127) dx = 127; if (dx < -127) dx = -127;
-  if (dy > 127) dy = 127; if (dy < -127) dy = -127;
-  mouse_scroll((int8_t)dx, (int8_t)dy);
-}
-
-// --- Macro (runtime in macro.cpp, player non-bloccante su loop()) ---
-
-static void handle_macro_save(AsyncWebSocketClient *client, JsonObject o) {
-  const char* id = o["id"] | "";
-  if (!macro_save(id, o["steps"].as<JsonArray>())) {
-    send_error(client, "macro non salvata (id o steps non validi, o limiti superati)");
-    return;
-  }
-  // lo state contiene la lista macro aggiornata: fa da ack
-  send_status(client, "state");
-}
-
-static void handle_macro_del(AsyncWebSocketClient *client, JsonObject o) {
-  const char* id = o["id"] | "";
-  if (!macro_del(id)) {
-    send_error(client, "macro non eliminata (id non valido o inesistente)");
-    return;
-  }
-  send_status(client, "state");
-}
-
-static void handle_macro_run(AsyncWebSocketClient *client, JsonObject o) {
-  const char* id = o["id"] | "";
-  if (macro_running()) {
-    send_error(client, "macro gia' in esecuzione");
-    return;
-  }
-  if (!macro_start(id)) {
-    send_error(client, "macro inesistente o non avviabile");
-  }
-  // a fine esecuzione arrivera' macro_done (broadcast)
-}
-
-static void handle_macro_get(AsyncWebSocketClient *client, JsonObject o) {
-  const char* id = o["id"] | "";
-  if (!macro_exists(id)) {
-    send_error(client, "macro inesistente");
-    return;
-  }
-  String blob = macro_blob(id);
-  JsonDocument d;
-  d["t"] = "macro_data";
-  d["id"] = id;
-  DeserializationError err = deserializeJson(d["steps"].to<JsonArray>(), blob);
-  if (err) {
-    send_error(client, "macro corrotta in NVS");
-    return;
-  }
-  send_doc(client, d);
-}
-
-// callback dal player (contesto loop): broadcast a tutti i client
-static void on_macro_done(const char* id) {
-  JsonDocument d;
-  d["t"] = "macro_done";
-  d["id"] = id;
-  String out;
-  serializeJson(d, out);
-  ws.textAll(out);
-}
+// --- Gestione messaggi ---
 
 static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
   JsonDocument doc;
@@ -207,7 +51,7 @@ static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t l
 
   const char* t = doc["t"] | "";
 
-  // Handshake: unico punto di auth
+  // Handshake: unico punto di auth (specifico del trasporto WS: token)
   if (!strcmp(t, "hello")) {
     const char* token = doc["token"] | "";
     // il preprocessore non può confrontare stringhe: il check di token
@@ -223,7 +67,9 @@ static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t l
       return;
     }
     s_authed = true;
-    send_status(client, "welcome");
+    JsonDocument w;
+    commands_status_fields(w, "welcome", ble_server_client_count());
+    send_doc(client, w);
     return;
   }
 
@@ -232,18 +78,7 @@ static void handle_message(AsyncWebSocketClient *client, uint8_t *data, size_t l
     return;
   }
 
-  if      (!strcmp(t, "key"))      handle_key(doc.as<JsonObject>());
-  else if (!strcmp(t, "text"))     handle_text(doc["s"] | "");
-  else if (!strcmp(t, "consumer")) handle_consumer(doc.as<JsonObject>());
-  else if (!strcmp(t, "mouse"))    handle_mouse(doc.as<JsonObject>());
-  else if (!strcmp(t, "mbtn"))     handle_mbtn(doc.as<JsonObject>());
-  else if (!strcmp(t, "scroll"))   handle_scroll(doc.as<JsonObject>());
-  else if (!strcmp(t, "state"))     send_status(client, "state");
-  else if (!strcmp(t, "macro_run"))  handle_macro_run(client, doc.as<JsonObject>());
-  else if (!strcmp(t, "macro_save")) handle_macro_save(client, doc.as<JsonObject>());
-  else if (!strcmp(t, "macro_del"))  handle_macro_del(client, doc.as<JsonObject>());
-  else if (!strcmp(t, "macro_get"))  handle_macro_get(client, doc.as<JsonObject>());
-  else send_error(client, "tipo messaggio sconosciuto");
+  commands_dispatch(t, doc.as<JsonObject>(), client, reply_ws);
 }
 
 // --- Eventi WebSocket ---
@@ -258,7 +93,7 @@ static void on_ws_event(AsyncWebSocket *server, AsyncWebSocketClient *client,
       Serial.printf("[ws] disconnect\n");
       // cambio client: richiesta nuovo handshake
       s_authed = false;
-      kb_clear();
+      commands_kb_clear();
       break;
     case WS_EVT_DATA:
       handle_message(client, data, len);
@@ -269,14 +104,32 @@ static void on_ws_event(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
+// --- OTA (preparazione: upload via POST /update, UI completa in fase 9) ---
+
+static void on_update_upload(AsyncWebServerRequest *req, const String& filename,
+                             size_t index, uint8_t *data, size_t len, bool final) {
+  if (index == 0) {
+    Serial.printf("[ota] upload %s\n", filename.c_str());
+    Update.begin();
+  }
+  if (len) Update.write(data, len);
+  if (final) {
+    bool ok = Update.end(true);
+    Serial.printf("[ota] %s (%u byte)\n", ok ? "completato" : "errore", (unsigned)(index + len));
+  }
+}
+
 void ws_server_begin(uint16_t port) {
-  macro_begin();
-  macro_set_on_done(on_macro_done);
+  commands_init();
+  commands_set_broadcasters(broadcast_ws, ble_server_broadcast);
 
   ws.onEvent(on_ws_event);
   server.addHandler(&ws);
 
-  // Endpoint HTTP di diagnostica, utile per test rapidi dal browser
+  // Portal WiFi (config credenziali + captive portal)
+  wifi_portal_routes(server);
+
+  // Endpoint HTTP di diagnostica
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *req) {
     String s = "{\"fw\":\"" MK_FW_VERSION "\",";
     s += "\"usb\":\"";
@@ -284,6 +137,32 @@ void ws_server_begin(uint16_t port) {
     s += "\"}";
     req->send(200, "application/json", s);
   });
+
+  // OTA: form minimale di upload (la UI definitiva e' in fase 9)
+  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *req) {
+    req->send(200, "text/html",
+      "<!doctype html><html lang='it'><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+      "<title>MK-Remote OTA</title></head>"
+      "<body style='font-family:system-ui;padding:24px'>"
+      "<h1>Aggiornamento firmware</h1>"
+      "<form method='POST' action='/update' enctype='multipart/form-data'>"
+      "<input type='file' name='bin' accept='.bin'>"
+      "<button style='display:block;margin-top:12px;padding:12px'>Carica e riavvia</button>"
+      "</form></body></html>");
+  });
+  server.on("/update", HTTP_POST,
+    [](AsyncWebServerRequest *req) {
+      bool ok = !Update.hasError();
+      req->send(ok ? 200 : 500, "text/plain",
+                ok ? "OK, riavvio in corso..." : "ERRORE upload");
+      if (ok) {
+        // piccola pausa per far partire la risposta, poi reboot
+        delay(300);
+        ESP.restart();
+      }
+    },
+    on_update_upload);
 
   server.begin();
 }
