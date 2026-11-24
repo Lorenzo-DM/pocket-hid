@@ -13,6 +13,8 @@ export const BLE_TX = '7a0c1002-8b6d-4d3f-9a2e-5f1c2b3d4e5f'; // ESP -> app
 const HEARTBEAT_MS = 15000;
 const MAX_BACKOFF_MS = 15000;
 const MAX_RECONNECTS = 5;
+const RX_BUF_MAX = 4096;
+const RX_CHUNK_TIMEOUT_MS = 1500;
 
 export const encoder = new TextEncoder();
 export const decoder = new TextDecoder();
@@ -23,6 +25,9 @@ export abstract class BleBase implements DeviceLink {
   protected attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private rxTimer: ReturnType<typeof setTimeout> | null = null;
+  private rxBuf = '';
+  private rxDecoder = new TextDecoder();
   private msgListeners = new Set<(msg: InMsg) => void>();
 
   onMessage(fn: (msg: InMsg) => void): () => void {
@@ -73,8 +78,30 @@ export abstract class BleBase implements DeviceLink {
   // --- da chiamare dalle sottoclassi ---
 
   protected handleNotify(data: DataView) {
-    const msg = parseInMsg(decoder.decode(data));
-    if (!msg) return;
+    const chunk = this.rxDecoder.decode(data, { stream: true });
+    if (!chunk) return;
+
+    if (this.rxTimer) {
+      clearTimeout(this.rxTimer);
+      this.rxTimer = null;
+    }
+
+    this.rxBuf += chunk;
+    if (this.rxBuf.length > RX_BUF_MAX) {
+      this.resetRx();
+      return;
+    }
+
+    const msg = parseInMsg(this.rxBuf);
+    if (!msg) {
+      // Risposta spezzata su piu' notify (es. macro_data > MTU): attende il chunk successivo
+      this.rxTimer = setTimeout(() => {
+        this.resetRx();
+      }, RX_CHUNK_TIMEOUT_MS);
+      return;
+    }
+
+    this.resetRx();
     this.msgListeners.forEach((fn) => fn(msg));
     switch (msg.t) {
       case 'welcome':
@@ -132,8 +159,18 @@ export abstract class BleBase implements DeviceLink {
     }
   }
 
+  private resetRx() {
+    this.rxBuf = '';
+    this.rxDecoder = new TextDecoder();
+    if (this.rxTimer) {
+      clearTimeout(this.rxTimer);
+      this.rxTimer = null;
+    }
+  }
+
   private clearTimers() {
     this.stopHeartbeat();
+    this.resetRx();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
