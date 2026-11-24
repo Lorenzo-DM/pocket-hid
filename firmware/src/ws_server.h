@@ -1,10 +1,11 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
-// WebSocket server (ESPAsyncWebServer) + router dei comandi.
-// In questa fase i canali BLE e il captive portal non ci sono ancora:
-// la logica di routing verrà estratta in command_router al passo BLE.
+// WebSocket server (ESPAsyncWebServer), HTTP API (/status, /update OTA),
+// route del captive portal e file statici PWA da LittleFS.
+// I comandi ricevuti su /ws vengono validati (auth per-client + framing) e
+// accodati verso loopTask tramite commands.h.
 
 void ws_server_begin(uint16_t port);
 void ws_server_loop();

@@ -1,20 +1,15 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <ESPmDNS.h>
 #include <Adafruit_TinyUSB.h>
 #include <USB.h>
 #include "config.h"
 #include "usb_hid.h"
+#include "commands.h"
 #include "ws_server.h"
 #include "ble_server.h"
 #include "wifi_mgr.h"
-#include "commands.h"
-
-static uint32_t s_lastWifiAttempt = 0;
-static bool s_mdnsStarted = false;
 
 void setup() {
-  // USB TinyUSB: l'ordine è importante —
+  // USB TinyUSB: l'ordine e' importante —
   // 1) TinyUSBDevice.begin() alloca i buffer dei descrittori
   // 2) usb_hid_begin() aggiunge le interfacce HID
   // 3) USB.begin() avvia lo stack TinyUSB del core, che serve i descrittori
@@ -28,12 +23,16 @@ void setup() {
   Serial.printf("\n[main] MK-Remote firmware %s\n", MK_FW_VERSION);
   Serial.printf("[main] USB HID init, mounted=%d\n", usb_hid_mounted());
 
-  // WiFi: STA con credenziali NVS (config portal) o compilata + AP captive portal
+  // Coda comandi + NVS macro: va inizializzata prima dei trasporti (BLE / WS)
+  commands_init();
+
+  // WiFi: STA (NVS o config compilata) + AP captive portal + mDNS
   wifi_begin();
 
-  // BLE GATT custom (pairing obbligatorio)
+  // BLE GATT custom (pairing cifrato obbligatorio)
   ble_server_begin();
 
+  // WebSocket + HTTP API + OTA + PWA LittleFS
   ws_server_begin(MK_WS_PORT);
   Serial.printf("[main] WebSocket server su porta %d\n", MK_WS_PORT);
 }
@@ -43,28 +42,9 @@ void loop() {
   TinyUSBDevice.task();
 #endif
   ws_server_loop();
-  wifi_loop();     // DNS captive portal + riavvio post-config
-  commands_tick(); // player macro
+  wifi_loop(); // DNS captive portal, eventi WiFi, mDNS, riconnessione, reboot
+  const bool busy = commands_tick();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!s_mdnsStarted) {
-      s_mdnsStarted = true;
-      Serial.printf("[main] WiFi connesso: %s\n", WiFi.localIP().toString().c_str());
-      if (MDNS.begin(MK_MDNS_NAME)) {
-        MDNS.addService("http", "tcp", MK_WS_PORT);
-        Serial.printf("[main] mDNS attivo: http://%s.local\n", MK_MDNS_NAME);
-      }
-    }
-  } else {
-    if (s_mdnsStarted) { s_mdnsStarted = false; MDNS.end(); }
-    uint32_t now = millis();
-    if (now - s_lastWifiAttempt > 10000) {
-      s_lastWifiAttempt = now;
-      Serial.printf("[main] WiFi non connesso, riprovo...\n");
-      WiFi.disconnect();
-      WiFi.begin(); // riprende le credenziali gia' impostate
-    }
-  }
-
-  delay(10);
+  // Quando ci sono comandi/text/macro attivi usa tick da 1 ms per latenza minima
+  delay(busy ? 1 : 10);
 }

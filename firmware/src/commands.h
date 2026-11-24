@@ -1,28 +1,36 @@
 #pragma once
 
-#include <ArduinoJson.h>
+#include <stddef.h>
+#include <stdint.h>
 
-// Router comandi condiviso dai trasporti (WebSocket, BLE). Estratto da
-// ws_server al passaggio al BLE (v. piano, "Deposito").
-// Il trasporto gestisce hello/auth (token su WS, pairing su BLE) e il parse;
-// qui stanno gli handler, lo stato 6KRO della tastiera e lo status comune.
+// Router comandi condiviso dai trasporti (WebSocket, BLE).
+// Architettura single-owner:
+// - I trasporti (task async_tcp e nimble_host) validano auth/framing e accodano
+//   i comandi tramite commands_enqueue_*() (thread-safe, non-bloccante).
+// - loopTask drena la coda e avanza tutte le azioni non-bloccanti (tap, text,
+//   consumer, macro, accessi NVS e USB HID) chiamando commands_tick().
 
-// Sink per le risposte: il trasporto invia il JSON al client sorgente.
-typedef void (*ReplyFn)(void* ctx, const char* json);
+enum class Transport : uint8_t {
+  WS = 0,
+  BLE = 1,
+};
+
+typedef void (*TransportSendFn)(uint32_t peerId, const char* json);
+typedef void (*BroadcastFn)(const char* json);
 
 void commands_init();
-void commands_tick(); // player macro
 
-// Campi comuni di welcome/state nel doc aperto (t, v, fw, layout, usb, ble, macros)
-void commands_status_fields(JsonDocument& d, const char* type, int ble_clients);
+// Registra i canali di risposta/broadcast dei trasporti (chiamare in setup()).
+void commands_set_ws_transport(TransportSendFn send, BroadcastFn broadcast);
+void commands_set_ble_transport(TransportSendFn send, BroadcastFn broadcast);
 
-// Esegue un comando gia' parserizzato; le risposte (errori, state) escono
-// sul sink. "hello" NON arriva qui.
-void commands_dispatch(const char* t, JsonObject o, void* ctx, ReplyFn reply);
+// API thread-safe chiamabili dai task dei trasporti (WS / BLE):
+bool commands_enqueue_welcome(Transport src, uint32_t peerId);
+bool commands_enqueue_mouse(int16_t dx, int16_t dy);
+bool commands_enqueue_scroll(int16_t dx, int16_t dy);
+bool commands_enqueue_json(Transport src, uint32_t peerId, const char* data, size_t len);
+bool commands_enqueue_input_clear();
 
-// Rilascio tastiera al cambio client
-void commands_kb_clear();
-
-// Broadcast asincroni (es. macro_done): registri i canali dei trasporti.
-// Un canale puo' essere NULL (trasporto assente).
-void commands_set_broadcasters(void (*ws)(const char*), void (*ble)(const char*));
+// Chiamare esclusivamente da loopTask. Ritorna true se c'e' lavoro attivo
+// (coda non vuota, tap/text/consumer pendenti o macro in corso).
+bool commands_tick();
