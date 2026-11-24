@@ -1,134 +1,181 @@
 import { useState } from 'react';
-import type { DeviceLink } from '../protocol/connection';
-import { currentTransport, setTransport, type Transport } from '../hooks/useConnection';
+import { Capacitor } from '@capacitor/core';
+import type { ConnStatus, DeviceLink } from '../protocol/connection';
+import {
+  defaultWsUrl,
+  isServedByEsp,
+  TOKEN_KEY,
+  URL_KEY,
+  type Transport,
+} from '../hooks/useConnection';
+import { IconBluetooth, IconBug, IconWifi } from './Icons';
 
 interface Props {
   conn: DeviceLink;
+  transport: Transport;
+  status: ConnStatus;
   statusDetail?: string;
+  onSwitchTransport: (t: Transport) => void;
 }
-
-const URL_KEY = 'mk.url';
-const TOKEN_KEY = 'mk.token';
 
 const MODES: { id: Transport; label: string }[] = [
-  { id: 'ws', label: '🏠 WiFi' },
-  { id: 'ble', label: '🔵 Bluetooth' },
-  { id: 'demo', label: '🐞 Demo' },
+  { id: 'ws', label: 'WiFi' },
+  { id: 'ble', label: 'Bluetooth' },
+  { id: 'demo', label: 'Demo' },
 ];
 
-// Se la PWA viene servita DALL'ESP (fase 8: LittleFS), la connessione WS
-// punta allo stesso host; in dev/file:// resta il default mDNS.
-function defaultWsUrl(): string {
-  if (location.protocol.startsWith('http') && !['localhost', '127.0.0.1'].includes(location.hostname)) {
-    return `ws://${location.host}/ws`;
-  }
-  return 'ws://esp32-hid.local/ws';
-}
-
-export function ConnectView({ conn, statusDetail }: Props) {
-  // Il tipo di connessione si decide al mount dell'hook: cambiare modalita'
-  // persista la scelta e ricarica la pagina.
-  const [mode] = useState<Transport>(currentTransport());
+export function ConnectView({
+  conn,
+  transport,
+  status,
+  statusDetail,
+  onSwitchTransport,
+}: Props) {
   const [url, setUrl] = useState(() => localStorage.getItem(URL_KEY) ?? defaultWsUrl());
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? '');
+  const servedByEsp = isServedByEsp();
 
-  const switchMode = (m: Transport) => {
-    if (m === mode) return;
-    if (m === 'demo') {
-      try {
-        localStorage.setItem('mk.debug', '1');
-        localStorage.removeItem('mk.transport');
-      } catch {
-        // storage non disponibile
-      }
-    } else {
-      setTransport(m);
-    }
-    location.reload();
-  };
+  const busy = status === 'connecting' || status === 'authing' || status === 'reconnecting';
+  const bleBlocked = transport === 'ble' && !Capacitor.isNativePlatform() && !window.isSecureContext;
 
-  const doConnect = () => {
-    if (mode === 'demo') {
+  const doConnect = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (transport === 'demo') {
       conn.connect('', '');
       return;
     }
-    localStorage.setItem(URL_KEY, url.trim());
-    localStorage.setItem(TOKEN_KEY, token);
-    conn.connect(url.trim(), token);
+    if (transport === 'ws') {
+      localStorage.setItem(URL_KEY, url.trim());
+      localStorage.setItem(TOKEN_KEY, token);
+      conn.connect(url.trim(), token);
+      return;
+    }
+    conn.connect('', '');
   };
 
-  const connectLabel =
-    mode === 'demo' ? 'Entra in demo' : mode === 'ble' ? 'Seleziona dispositivo' : 'Connetti';
+  const connectLabel = busy
+    ? status === 'authing'
+      ? 'Autenticazione…'
+      : 'Connessione…'
+    : transport === 'demo'
+      ? 'Avvia modalità Demo'
+      : transport === 'ble'
+        ? 'Seleziona dispositivo BLE'
+        : 'Connetti';
 
   return (
-    <div className="connect">
-      <h1>MK-Remote</h1>
-      <p className="muted">Tastiera e mouse per la tua TV o il tuo PC</p>
+    <div className="connect-wrap">
+      <form className="connect-card" onSubmit={doConnect}>
+        <div className="connect-brand">
+          <div className="brand-mark" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2.5" y="4.5" width="19" height="15" rx="3" />
+              <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+            </svg>
+          </div>
+          <div>
+            <h1>MK-Remote</h1>
+            <p className="muted">Mouse, tastiera e macro per PC, TV e ogni dispositivo USB</p>
+          </div>
+        </div>
 
-      <div className="transport-tabs">
-        {MODES.map((m) => (
-          <button
-            key={m.id}
-            className={`transport-tab ${mode === m.id ? 'active' : ''}`}
-            onClick={() => switchMode(m.id)}
-          >
-            {m.label}
+        <div className="segmented" role="tablist" aria-label="Canale di connessione">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={transport === m.id}
+              className={`seg-btn ${transport === m.id ? 'active' : ''}`}
+              onClick={() => onSwitchTransport(m.id)}
+            >
+              {m.id === 'ws' && <IconWifi size={16} />}
+              {m.id === 'ble' && <IconBluetooth size={16} />}
+              {m.id === 'demo' && <IconBug size={16} />}
+              <span>{m.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {transport === 'ws' && (
+          <details className="advanced-box" open={!servedByEsp || Boolean(statusDetail)}>
+            <summary>
+              <span>Destinazione WiFi</span>
+              <span className="summary-val">{url.replace(/^ws:\/\//, '').replace(/\/ws$/, '')}</span>
+            </summary>
+            <div className="advanced-fields">
+              <label className="field">
+                <span>Indirizzo WebSocket ESP32</span>
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="ws://esp32-hid.local/ws"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                />
+              </label>
+
+              <label className="field">
+                <span>
+                  Token <small className="muted">(opzionale)</small>
+                </span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="vuoto = nessuna auth"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+          </details>
+        )}
+
+        {transport === 'ble' && (
+          <div className={`callout ${bleBlocked ? 'warn' : ''}`}>
+            {bleBlocked ? (
+              <>
+                <strong>Web Bluetooth richiede HTTPS.</strong> Da pagina servita dall&apos;ESP in HTTP usa il canale <strong>WiFi</strong> oppure l&apos;app Android.
+              </>
+            ) : (
+              <>
+                Seleziona <strong>MK-Remote</strong> nella finestra Bluetooth del dispositivo. Al primo utilizzo conferma il pairing.
+              </>
+            )}
+          </div>
+        )}
+
+        {transport === 'demo' && (
+          <div className="callout">
+            Modalità simulata senza hardware: testa trackpad, telecomando, tastiera e macro con log dei pacchetti in tempo reale.
+          </div>
+        )}
+
+        <div className="connect-actions">
+          <button type="submit" className="btn-primary full" disabled={busy || bleBlocked}>
+            {connectLabel}
           </button>
-        ))}
-      </div>
-
-      {mode === 'ws' && (
-        <>
-          <label>
-            Indirizzo ESP32
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="ws://esp32-hid.local/ws oppure ws://192.168.x.x/ws"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-
-          <label>
-            Token <span className="muted">(se configurato sul firmware)</span>
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="vuoto = nessuna auth"
-              autoComplete="off"
-            />
-          </label>
-        </>
-      )}
-
-      {mode === 'ble' && (
-        <p className="hint">
-          Scegli il dispositivo <strong>MK-Remote</strong> nella finestra di pairing
-          del browser. Il primo accoppiamento va confermato anche sull'ESP
-          (pairing BLE obbligatorio). Su iOS serve l'app nativa (Capacitor).
-          {!window.isSecureContext && (
-            <span className="warn">
-              {' '}⚠ Web Bluetooth richiede HTTPS: da pagina servita dall'ESP (http)
-              non è disponibile — usa la tab WiFi o l'app Android.
-            </span>
+          {busy && (
+            <button
+              type="button"
+              className="btn-secondary full"
+              onClick={() => conn.disconnect()}
+            >
+              Annulla
+            </button>
           )}
-        </p>
-      )}
+        </div>
 
-      <button className="primary" onClick={doConnect}>{connectLabel}</button>
+        {statusDetail && <p className="callout error">{statusDetail}</p>}
 
-      {statusDetail && <p className="error">{statusDetail}</p>}
-
-      {mode === 'ws' && (
-        <p className="hint">
-          Connetti il telefono alla stessa rete WiFi dell'ESP32.
-          L'indirizzo di default funziona se il firmware ha mDNS attivo;
-          in alternativa usa l'IP mostrato dal log seriale.
-        </p>
-      )}
+        {transport === 'ws' && (
+          <p className="hint-sm">
+            Collega il telefono alla stessa WiFi dell&apos;ESP32 o al suo hotspot <code>MK-Remote</code>.
+          </p>
+        )}
+      </form>
     </div>
   );
 }

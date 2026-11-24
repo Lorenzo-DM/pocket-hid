@@ -1,27 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DeviceLink } from '../protocol/connection';
+import { K } from '../protocol/hid';
+import { transliterateAscii, type Prefs } from '../hooks/usePrefs';
+import { IconBackspace, IconClose, IconKeyboard, IconReturn, IconSend } from './Icons';
 
 interface Props {
   conn: DeviceLink;
+  prefs: Prefs;
+  vibrate: (p?: number | number[]) => void;
 }
 
-// Trackpad touch:
-//  - 1 dito: movimento relativo, inviato a ~60Hz (rAF coalescing)
-//  - tap breve senza movimento = click sinistro
-//  - long-press fermo (>550ms) = click destro
-//  - 2 dita: scroll (coalesced sullo stesso loop)
-//  - pulsanti fisici sotto: L/R con pressione prolungata = drag
-//
-// Nota firmware: i delta mouse sono int8_t (±127). Se un frame accumula più di
-// quel limite, si invia il massimo e il resto resta nell'accumulatore per il
-// frame successivo.
+// Trackpad mobile-first:
+//  - 1 dito sul pad: movimento relativo (sensibilità da prefs)
+//  - fascia destra dedicata: scroll a 1 dito (uso con una sola mano!)
+//  - tap breve 1 dito: click sx · doppio tap + tieni: drag
+//  - tap breve 2 dita o long-press fermo (>550ms): click dx
+//  - 2 dita trascinamento: scroll
+//  - barra rapida "Scrivi" inline per digitare subito senza cambiare tab
 
-const SENSITIVITY = 1.6; // moltiplicatore delta grezzi -> pixel target
-const SCROLL_DIV = 12; // px touch -> tacche scroll
-const TAP_MAX_MS = 250;
+const SCROLL_BASE_DIV = 12;
+const TAP_MAX_MS = 240;
 const TAP_MAX_PX = 12;
+const DOUBLE_TAP_MS = 280;
 const LONGPRESS_MS = 550;
-const CLAMP = 120; // margine sotto il limite int8
+const CLAMP = 120;
 
 interface PointerState {
   startT: number;
@@ -31,18 +33,26 @@ interface PointerState {
   lastY: number;
 }
 
-export function TrackpadView({ conn }: Props) {
+export function TrackpadView({ conn, prefs, vibrate }: Props) {
   const padRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const quickInputRef = useRef<HTMLInputElement>(null);
+
   const pointers = useRef(new Map<number, PointerState>());
+  const railPointer = useRef<{ id: number; lastY: number } | null>(null);
   const moveAcc = useRef({ x: 0, y: 0 });
   const scrollAcc = useRef({ x: 0, y: 0 });
   const rafId = useRef(0);
   const totalMove = useRef(0);
+  const maxFingers = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
-  const [dragging, setDragging] = useState(false); // feedback visivo
+  const lastTapTime = useRef(0);
+  const tapDragActive = useRef(false);
 
-  // ---- loop di invio ~60Hz (coalescing) ----
+  const [padFeedback, setPadFeedback] = useState<'idle' | 'active' | 'drag'>('idle');
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickText, setQuickText] = useState('');
 
   const sendClamped = (acc: { x: number; y: number }, type: 'mouse' | 'scroll') => {
     const dx = Math.max(-CLAMP, Math.min(CLAMP, Math.round(acc.x)));
@@ -57,7 +67,7 @@ export function TrackpadView({ conn }: Props) {
   const pump = () => {
     const sentMove = sendClamped(moveAcc.current, 'mouse');
     const sentScroll = sendClamped(scrollAcc.current, 'scroll');
-    if (pointers.current.size > 0 || sentMove || sentScroll) {
+    if (pointers.current.size > 0 || railPointer.current || sentMove || sentScroll) {
       rafId.current = requestAnimationFrame(pump);
     } else {
       rafId.current = 0;
@@ -72,10 +82,18 @@ export function TrackpadView({ conn }: Props) {
     return () => {
       if (rafId.current) cancelAnimationFrame(rafId.current);
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (tapDragActive.current) conn.send({ t: 'mbtn', b: 0, act: 'u' });
     };
-  }, []);
+  }, [conn]);
 
-  // ---- click / long-press ----
+  useEffect(() => {
+    if (quickOpen) quickInputRef.current?.focus();
+  }, [quickOpen]);
+
+  const flashPad = () => {
+    setPadFeedback('active');
+    setTimeout(() => setPadFeedback((cur) => (cur === 'active' ? 'idle' : cur)), 140);
+  };
 
   const cancelLongPress = () => {
     if (longPressTimer.current) {
@@ -84,23 +102,23 @@ export function TrackpadView({ conn }: Props) {
     }
   };
 
-  const rightClick = () => {
+  const fireRightClick = () => {
     longPressFired.current = true;
     conn.send({ t: 'mbtn', b: 1, act: 'c' });
-    setDragging(true);
-    setTimeout(() => setDragging(false), 150);
+    vibrate([12, 30, 12]);
+    flashPad();
   };
 
-  const tapClick = () => {
+  const fireLeftClick = () => {
     conn.send({ t: 'mbtn', b: 0, act: 'c' });
-    setDragging(true);
-    setTimeout(() => setDragging(false), 150);
+    vibrate(10);
+    flashPad();
   };
 
-  // ---- eventi pointer ----
+  // ---- Eventi area trackpad principale ----
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (pointers.current.size >= 2) return; // max 2 dita
+    if (pointers.current.size >= 2) return;
     padRef.current?.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, {
       startT: e.timeStamp,
@@ -109,14 +127,29 @@ export function TrackpadView({ conn }: Props) {
       lastX: e.clientX,
       lastY: e.clientY,
     });
+    maxFingers.current = Math.max(maxFingers.current, pointers.current.size);
 
     if (pointers.current.size === 1) {
       totalMove.current = 0;
       longPressFired.current = false;
-      longPressTimer.current = setTimeout(rightClick, LONGPRESS_MS);
+      maxFingers.current = 1;
+
+      // Doppio tap + tieni premuto -> drag & drop con 1 dito
+      if (e.timeStamp - lastTapTime.current <= DOUBLE_TAP_MS) {
+        tapDragActive.current = true;
+        conn.send({ t: 'mbtn', b: 0, act: 'd' });
+        vibrate(14);
+        setPadFeedback('drag');
+      } else {
+        longPressTimer.current = setTimeout(fireRightClick, LONGPRESS_MS);
+      }
     } else {
-      cancelLongPress(); // secondo dito: niente long-press nè tap
-      longPressFired.current = true;
+      cancelLongPress();
+      if (tapDragActive.current) {
+        tapDragActive.current = false;
+        conn.send({ t: 'mbtn', b: 0, act: 'u' });
+        setPadFeedback('idle');
+      }
     }
     ensurePump();
   };
@@ -132,12 +165,16 @@ export function TrackpadView({ conn }: Props) {
     totalMove.current += Math.abs(dx) + Math.abs(dy);
     if (totalMove.current > TAP_MAX_PX) cancelLongPress();
 
+    const { sensitivity, scrollSpeed, naturalScroll } = prefs;
+
     if (pointers.current.size === 1) {
-      moveAcc.current.x += dx * SENSITIVITY;
-      moveAcc.current.y += dy * SENSITIVITY;
+      moveAcc.current.x += dx * sensitivity;
+      moveAcc.current.y += dy * sensitivity;
     } else if (pointers.current.size === 2) {
-      scrollAcc.current.x += dx / SCROLL_DIV;
-      scrollAcc.current.y += dy / SCROLL_DIV;
+      const dir = naturalScroll ? 1 : -1;
+      const div = SCROLL_BASE_DIV / scrollSpeed;
+      scrollAcc.current.x += (dx * dir) / div;
+      scrollAcc.current.y += (dy * dir) / div;
     }
     ensurePump();
   };
@@ -148,59 +185,219 @@ export function TrackpadView({ conn }: Props) {
     pointers.current.delete(e.pointerId);
     cancelLongPress();
 
-    // tap: un solo dito, breve, quasi fermo, long-press non scattato
+    if (tapDragActive.current && pointers.current.size === 0) {
+      tapDragActive.current = false;
+      conn.send({ t: 'mbtn', b: 0, act: 'u' });
+      setPadFeedback('idle');
+      lastTapTime.current = 0;
+      return;
+    }
+
     const duration = e.timeStamp - p.startT;
-    if (
-      pointers.current.size === 0 &&
-      !longPressFired.current &&
-      duration <= TAP_MAX_MS &&
-      totalMove.current <= TAP_MAX_PX
-    ) {
-      tapClick();
+    if (pointers.current.size === 0 && !longPressFired.current && duration <= TAP_MAX_MS && totalMove.current <= TAP_MAX_PX) {
+      if (maxFingers.current === 2) {
+        fireRightClick();
+        lastTapTime.current = 0;
+      } else {
+        fireLeftClick();
+        lastTapTime.current = e.timeStamp;
+      }
     }
   };
 
   const onPointerCancel = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
     cancelLongPress();
+    if (tapDragActive.current && pointers.current.size === 0) {
+      tapDragActive.current = false;
+      conn.send({ t: 'mbtn', b: 0, act: 'u' });
+      setPadFeedback('idle');
+    }
   };
 
-  // ---- pulsanti fisici L/R (pressione prolungata = drag) ----
+  // ---- Fascia scroll a 1 dito sul bordo destro ----
+
+  const onRailDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    railRef.current?.setPointerCapture(e.pointerId);
+    railPointer.current = { id: e.pointerId, lastY: e.clientY };
+    ensurePump();
+  };
+
+  const onRailMove = (e: React.PointerEvent) => {
+    if (!railPointer.current || railPointer.current.id !== e.pointerId) return;
+    e.stopPropagation();
+    const dy = e.clientY - railPointer.current.lastY;
+    railPointer.current.lastY = e.clientY;
+    const { scrollSpeed, naturalScroll } = prefs;
+    const dir = naturalScroll ? 1 : -1;
+    const div = (SCROLL_BASE_DIV * 0.85) / scrollSpeed;
+    scrollAcc.current.y += (dy * dir) / div;
+    ensurePump();
+  };
+
+  const onRailUp = (e: React.PointerEvent) => {
+    if (railPointer.current?.id === e.pointerId) {
+      e.stopPropagation();
+      railPointer.current = null;
+    }
+  };
+
+  // ---- Pulsanti fisici L / M / R ----
 
   const buttonHandlers = (b: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
       conn.send({ t: 'mbtn', b, act: 'd' });
-      setDragging(true);
+      vibrate(10);
+      setPadFeedback('drag');
     },
     onPointerUp: (e: React.PointerEvent) => {
       e.stopPropagation();
       conn.send({ t: 'mbtn', b, act: 'u' });
-      setDragging(false);
+      setPadFeedback('idle');
     },
     onPointerCancel: () => {
       conn.send({ t: 'mbtn', b, act: 'u' });
-      setDragging(false);
+      setPadFeedback('idle');
     },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
+  // ---- Barra rapida testo ----
+
+  const sendQuick = (withEnter: boolean) => {
+    const payload = prefs.transliterate ? transliterateAscii(quickText) : quickText;
+    if (payload) {
+      conn.send({ t: 'text', s: payload });
+    }
+    if (withEnter) {
+      conn.send({ t: 'key', code: K.ENTER, mods: 0, act: 't' });
+    }
+    if (payload || withEnter) {
+      vibrate(10);
+      setQuickText('');
+    }
+  };
+
   return (
     <div className="trackpad">
-      <div
-        ref={padRef}
-        className={`pad ${dragging ? 'dragging' : ''}`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <span className="pad-hint">1 dito: muovi · tap: click · lungo: destro · 2 dita: scroll</span>
+      {quickOpen ? (
+        <form
+          className="quick-type-bar"
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendQuick(true);
+          }}
+        >
+          <input
+            ref={quickInputRef}
+            type="text"
+            value={quickText}
+            onChange={(e) => setQuickText(e.target.value)}
+            placeholder="Scrivi testo rapido…"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className="qt-btn"
+            onClick={() => {
+              conn.send({ t: 'key', code: K.BACKSPACE, mods: 0, act: 't' });
+              vibrate(8);
+            }}
+            aria-label="Backspace"
+            title="Backspace"
+          >
+            <IconBackspace size={18} />
+          </button>
+          <button
+            type="button"
+            className="qt-btn"
+            disabled={!quickText}
+            onClick={() => sendQuick(false)}
+            aria-label="Invia testo"
+            title="Invia"
+          >
+            <IconSend size={17} />
+          </button>
+          <button
+            type="submit"
+            className="qt-btn primary"
+            aria-label="Invia e premi Invio"
+            title="Invia + Invio"
+          >
+            <IconReturn size={18} />
+          </button>
+          <button
+            type="button"
+            className="qt-btn ghost"
+            onClick={() => setQuickOpen(false)}
+            aria-label="Chiudi scrittura rapida"
+          >
+            <IconClose size={18} />
+          </button>
+        </form>
+      ) : (
+        <div className="trackpad-toolbar">
+          <button
+            type="button"
+            className="quick-trigger"
+            onClick={() => setQuickOpen(true)}
+          >
+            <IconKeyboard size={16} />
+            <span>Scrivi testo rapido…</span>
+          </button>
+        </div>
+      )}
+
+      <div className={`pad-shell ${padFeedback}`}>
+        <div
+          ref={padRef}
+          className="pad-surface"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <span className="pad-hint">
+            {padFeedback === 'drag'
+              ? 'Trascinamento attivo'
+              : 'Tap: sx · 2 dita/lungo: dx · 2× tap: drag'}
+          </span>
+        </div>
+
+        <div
+          ref={railRef}
+          className="scroll-rail"
+          aria-label="Barra di scorrimento"
+          onPointerDown={onRailDown}
+          onPointerMove={onRailMove}
+          onPointerUp={onRailUp}
+          onPointerCancel={onRailUp}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <span className="scroll-rail-grip" aria-hidden="true" />
+        </div>
       </div>
+
       <div className="pad-buttons">
-        <button className="pad-btn" {...buttonHandlers(0)}>Click sx</button>
-        <button className="pad-btn" {...buttonHandlers(1)}>Click dx</button>
+        <button type="button" className="pad-btn" {...buttonHandlers(0)}>
+          Click sx
+        </button>
+        <button
+          type="button"
+          className="pad-btn middle"
+          aria-label="Click centrale"
+          title="Click centrale"
+          {...buttonHandlers(2)}
+        >
+          •
+        </button>
+        <button type="button" className="pad-btn" {...buttonHandlers(1)}>
+          Click dx
+        </button>
       </div>
     </div>
   );

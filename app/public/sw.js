@@ -5,7 +5,7 @@
 // Nota: la pagina connettiva resta la stessa; la cache rende l'app avviabile
 // anche quando l'ESP non risponde (poi l'utente sceglie BLE).
 
-const CACHE = 'mk-pwa-v1';
+const CACHE = 'mk-pwa-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/index.html'])));

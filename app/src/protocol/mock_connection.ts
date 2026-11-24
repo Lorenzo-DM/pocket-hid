@@ -3,25 +3,34 @@
 // logga ogni messaggio nel log di debug on-screen.
 
 import type { ConnectionCallbacks, ConnStatus, DeviceLink } from './connection';
-import type { DeviceInfo, InMsg, OutMsg } from './messages';
+import type { DeviceInfo, InMsg, MacroStep, OutMsg } from './messages';
 import { debugLog } from './debug';
 
 // Nella demo la lista macro vive qui: save/del la modificano e il successivo
 // state la restituisce, come farebbe l'ESP.
 const fakeDevice: DeviceInfo = {
-  fw: '0.2.0-demo',
+  fw: '0.3.0-demo',
   layout: 'us',
   usb: 'mounted',
-  macros: [],
+  macros: ['youtube', 'copia-url'],
 };
 
 export class MockConnection implements DeviceLink {
   private cb: ConnectionCallbacks = {};
   private timers: ReturnType<typeof setTimeout>[] = [];
   private closed = true;
-  private device: DeviceInfo = { ...fakeDevice, macros: [] };
+  private device: DeviceInfo = { ...fakeDevice, macros: [...fakeDevice.macros] };
+  private macroSteps = new Map<string, MacroStep[]>([
+    ['youtube', [{ s: 'youtube.com' }, { k: 0x28 }]],
+    ['copia-url', [{ k: 0x0f, m: 1 }, { w: 100 }, { k: 0x06, m: 1 }]],
+  ]);
   private runningMacro: string | null = null;
   private msgListeners = new Set<(msg: InMsg) => void>();
+
+  private emit(msg: InMsg) {
+    debugLog('rx', JSON.stringify(msg));
+    this.msgListeners.forEach((fn) => fn(msg));
+  }
 
   onMessage(fn: (msg: InMsg) => void): () => void {
     this.msgListeners.add(fn);
@@ -75,6 +84,7 @@ export class MockConnection implements DeviceLink {
           this.later(30, () => this.cb.onError?.('demo: limite macro raggiunto'));
           break;
         }
+        this.macroSteps.set(msg.id, msg.steps);
         this.device = {
           ...this.device,
           macros: this.device.macros.includes(msg.id)
@@ -84,19 +94,20 @@ export class MockConnection implements DeviceLink {
         debugLog('info', `demo: macro "${msg.id}" salvata (${msg.steps.length} step)`);
         this.later(30, () => {
           if (this.closed) return;
-          debugLog('rx', JSON.stringify({ t: 'state', ...this.device }));
+          this.emit({ t: 'state', ...this.device });
           this.cb.onDeviceInfo?.(this.device);
         });
         break;
 
       case 'macro_del':
+        this.macroSteps.delete(msg.id);
         this.device = {
           ...this.device,
           macros: this.device.macros.filter((m) => m !== msg.id),
         };
         this.later(30, () => {
           if (this.closed) return;
-          debugLog('rx', JSON.stringify({ t: 'state', ...this.device }));
+          this.emit({ t: 'state', ...this.device });
           this.cb.onDeviceInfo?.(this.device);
         });
         break;
@@ -108,18 +119,17 @@ export class MockConnection implements DeviceLink {
         }
         this.runningMacro = msg.id;
         debugLog('info', `demo: esecuzione macro "${msg.id}"…`);
-        this.later(800, () => {
+        this.later(700, () => {
           this.runningMacro = null;
           if (this.closed) return;
-          debugLog('rx', JSON.stringify({ t: 'macro_done', id: msg.id }));
+          this.emit({ t: 'macro_done', id: msg.id });
         });
         break;
 
       case 'macro_get':
-        // il mock non conserva gli step: risponde con un placeholder
         this.later(30, () => {
           if (this.closed) return;
-          debugLog('rx', JSON.stringify({ t: 'macro_data', id: msg.id, steps: [] }));
+          this.emit({ t: 'macro_data', id: msg.id, steps: this.macroSteps.get(msg.id) ?? [] });
         });
         break;
     }

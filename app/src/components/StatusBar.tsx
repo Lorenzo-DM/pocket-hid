@@ -1,50 +1,69 @@
 import type { DeviceInfo } from '../protocol/messages';
 import type { ConnStatus } from '../protocol/connection';
 import type { Transport } from '../hooks/useConnection';
+import { IconBluetooth, IconBug, IconSettings, IconWifi } from './Icons';
 
 interface Props {
   status: ConnStatus;
   device: DeviceInfo | null;
-  transport?: Transport;
-  debug?: boolean;
+  transport: Transport;
+  onOpenSettings: () => void;
   onDisconnect: () => void;
 }
 
-const TRANSPORT_LABEL: Record<Transport, string> = {
-  ws: '🏠',
-  ble: '🔵',
-  demo: '🐞',
+const TRANSPORT_NAME: Record<Transport, string> = {
+  ws: 'WiFi',
+  ble: 'BLE',
+  demo: 'DEMO',
 };
 
-const STATUS_LABEL: Record<ConnStatus, string> = {
-  idle: 'Non connesso',
-  connecting: 'Connessione…',
-  authing: 'Handshake…',
-  ready: 'Connesso',
-  reconnecting: 'Riconnessione…',
-  closed: 'Disconnesso',
-  error: 'Errore',
-};
+export function StatusBar({ status, device, transport, onOpenSettings, onDisconnect }: Props) {
+  const isReady = status === 'ready';
+  const isReconnecting = status === 'reconnecting' || status === 'connecting' || status === 'authing';
+  const usbMissing = device && device.usb === 'unmounted';
 
-export function StatusBar({ status, device, transport, onDisconnect }: Props) {
+  const dotClass = isReady ? 'ok' : isReconnecting ? 'warn' : 'bad';
+
   return (
     <header className="statusbar">
-      {transport && (
-        <span
-          className={`transport-badge ${transport === 'demo' ? 'demo-badge' : ''}`}
-          title={transport === 'ws' ? 'WiFi' : transport === 'ble' ? 'Bluetooth' : 'Demo'}
-        >
-          {TRANSPORT_LABEL[transport]}
+      <div className="status-left">
+        <span className={`dot ${dotClass}`} />
+        <span className={`transport-pill ${transport === 'demo' ? 'is-demo' : ''}`}>
+          {transport === 'ws' && <IconWifi size={14} />}
+          {transport === 'ble' && <IconBluetooth size={14} />}
+          {transport === 'demo' && <IconBug size={14} />}
+          <span>{TRANSPORT_NAME[transport]}</span>
         </span>
-      )}
-      <span className={`dot ${status === 'ready' ? 'ok' : 'bad'}`} />
-      <span className="status-label">{STATUS_LABEL[status]}</span>
-      {device && (
-        <span className="muted">
-          fw {device.fw} · USB {device.usb === 'mounted' ? '✓' : '✗'} · layout {device.layout}
-        </span>
-      )}
-      <button className="link" onClick={onDisconnect}>Disconnetti</button>
+      </div>
+
+      <div className="status-center">
+        {isReconnecting && (
+          <span className="status-pill warn">
+            Riconnessione…
+            <button type="button" className="status-pill-action" onClick={onDisconnect}>
+              Annulla
+            </button>
+          </span>
+        )}
+        {!isReconnecting && usbMissing && (
+          <span className="status-pill bad" title="Collega l'ESP32 al PC o alla TV via USB">
+            USB non rilevata
+          </span>
+        )}
+        {!isReconnecting && !usbMissing && device && (
+          <span className="status-meta">MK-Remote</span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className="icon-btn"
+        onClick={onOpenSettings}
+        aria-label="Impostazioni e stato dispositivo"
+        title="Impostazioni"
+      >
+        <IconSettings size={20} />
+      </button>
     </header>
   );
 }

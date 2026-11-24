@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import type { DeviceLink } from '../protocol/connection';
 import type { MacroStep } from '../protocol/messages';
 import { K, CONSUMER, MOD } from '../protocol/hid';
+import { IconClose, IconEdit, IconMacro, IconPlus, IconTrash } from './Icons';
 
 interface Props {
   conn: DeviceLink;
   macros: string[];
+  vibrate: (p?: number | number[]) => void;
+  onToast: (text: string, kind?: 'info' | 'error') => void;
 }
-
-// Fase 5: gestione macro. La lista vive nell'ESP (NVS) e arriva nel
-// welcome/state; il contenuto si scarica con macro_get → macro_data.
 
 type StepType = 'key' | 'text' | 'media' | 'wait';
 
@@ -29,7 +29,7 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
   { label: 'Esc', code: K.ESC },
   { label: 'Tab', code: K.TAB },
   { label: 'Spazio', code: K.SPACE },
-  { label: '⌫', code: K.BACKSPACE },
+  { label: '⌫ Backspace', code: K.BACKSPACE },
   { label: 'Del', code: K.DELETE },
   { label: '←', code: K.LEFT },
   { label: '→', code: K.RIGHT },
@@ -38,20 +38,31 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
   { label: 'Home', code: K.HOME },
   { label: 'Fine', code: K.END },
   { label: 'PgSu', code: K.PAGEUP },
-  { label: 'PgGiu', code: K.PAGEDOWN },
+  { label: 'PgGiù', code: K.PAGEDOWN },
+  { label: '(Solo modificatori, es. Win)', code: 0 },
 ];
 
 const MEDIA_OPTIONS: { label: string; code: number }[] = [
   { label: 'Vol +', code: CONSUMER.VOLUME_UP },
-  { label: 'Vol -', code: CONSUMER.VOLUME_DOWN },
+  { label: 'Vol −', code: CONSUMER.VOLUME_DOWN },
   { label: 'Mute', code: CONSUMER.MUTE },
-  { label: 'Play/Pause', code: CONSUMER.PLAY_PAUSE },
+  { label: 'Play / Pausa', code: CONSUMER.PLAY_PAUSE },
   { label: 'Stop', code: CONSUMER.STOP },
-  { label: 'Next', code: CONSUMER.NEXT_TRACK },
-  { label: 'Prev', code: CONSUMER.PREV_TRACK },
+  { label: 'Traccia succ.', code: CONSUMER.NEXT_TRACK },
+  { label: 'Traccia prec.', code: CONSUMER.PREV_TRACK },
   { label: 'Power', code: CONSUMER.POWER },
   { label: 'Lum +', code: CONSUMER.BRIGHTNESS_UP },
-  { label: 'Lum -', code: CONSUMER.BRIGHTNESS_DOWN },
+  { label: 'Lum −', code: CONSUMER.BRIGHTNESS_DOWN },
+];
+
+const QUICK_STEPS: { label: string; step: MacroStep }[] = [
+  { label: '⊞ Win', step: { k: 0, m: MOD.GUI } },
+  { label: '↵ Invio', step: { k: K.ENTER } },
+  { label: 'Esc', step: { k: K.ESC } },
+  { label: 'Tab', step: { k: K.TAB } },
+  { label: 'Alt+Tab', step: { k: K.TAB, m: MOD.ALT } },
+  { label: '⏱ 500ms', step: { w: 500 } },
+  { label: '⏯ Play', step: { c: CONSUMER.PLAY_PAUSE } },
 ];
 
 function mediaLabel(code: number): string {
@@ -60,7 +71,6 @@ function mediaLabel(code: number): string {
 
 function stepLabel(s: MacroStep): string {
   if ('k' in s) {
-    const key = KEY_OPTIONS.find((o) => o.code === s.k)?.label ?? `0x${s.k.toString(16)}`;
     const mods: string[] = [];
     if (s.m) {
       if (s.m & MOD.CTRL) mods.push('Ctrl');
@@ -68,48 +78,72 @@ function stepLabel(s: MacroStep): string {
       if (s.m & MOD.ALT) mods.push('Alt');
       if (s.m & MOD.GUI) mods.push('Win');
     }
-    return `Tasto ${mods.length ? mods.join('+') + '+' : ''}${key}`;
+    if (s.k === 0) return mods.join('+') || 'Mod';
+    const key = KEY_OPTIONS.find((o) => o.code === s.k)?.label ?? `0x${s.k.toString(16)}`;
+    return `${mods.length ? mods.join('+') + '+' : ''}${key}`;
   }
-  if ('s' in s) return `Testo: "${s.s.length > 24 ? s.s.slice(0, 24) + '…' : s.s}"`;
-  if ('c' in s) return `Media: ${mediaLabel(s.c)}`;
-  return `Attesa ${s.w} ms`;
+  if ('s' in s) return `"${s.s.length > 26 ? s.s.slice(0, 26) + '…' : s.s}"`;
+  if ('c' in s) return mediaLabel(s.c);
+  return `${s.w} ms`;
 }
 
-export function MacroView({ conn, macros }: Props) {
+function stepBadge(s: MacroStep): string {
+  if ('k' in s) return 'TASTO';
+  if ('s' in s) return 'TESTO';
+  if ('c' in s) return 'MEDIA';
+  return 'ATTESA';
+}
+
+export function MacroView({ conn, macros, vibrate, onToast }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
-  // macro_done: sblocca il pulsante Run; macro_data: apre l'editor
   useEffect(() => {
     const off = conn.onMessage?.((msg) => {
       if (msg.t === 'macro_done') {
         setBusy((b) => (b === msg.id ? null : b));
+        onToast(`Macro "${msg.id}" completata`);
       } else if (msg.t === 'macro_data') {
         setEditing({ id: msg.id, steps: msg.steps });
       }
     });
     return () => off?.();
-  }, [conn]);
+  }, [conn, onToast]);
 
   const run = (id: string) => {
+    if (busy !== null) return;
     setBusy(id);
+    vibrate(14);
     conn.send({ t: 'macro_run', id });
-    // sblocco di sicurezza se macro_done va perso
     setTimeout(() => setBusy((b) => (b === id ? null : b)), 10000);
   };
 
-  const edit = (id: string) => conn.send({ t: 'macro_get', id });
+  const edit = (id: string) => {
+    setConfirmDel(null);
+    conn.send({ t: 'macro_get', id });
+  };
 
   const remove = (id: string) => {
-    if (!confirm(`Eliminare la macro "${id}"?`)) return;
+    if (confirmDel !== id) {
+      setConfirmDel(id);
+      vibrate([10, 30, 10]);
+      return;
+    }
+    setConfirmDel(null);
     conn.send({ t: 'macro_del', id });
+    onToast(`Macro "${id}" eliminata`);
     if (editing?.id === id) setEditing(null);
   };
 
   const save = () => {
     if (!editing) return;
     conn.send({ t: 'macro_save', id: editing.id, steps: editing.steps });
+    vibrate(12);
+    onToast(`Macro "${editing.id}" salvata`);
     setEditing(null);
+    setEditMode(false);
   };
 
   if (editing) {
@@ -124,36 +158,110 @@ export function MacroView({ conn, macros }: Props) {
   }
 
   return (
-    <div className="macro">
-      <button className="primary" onClick={() => setEditing({ id: '', steps: [] })}>
-        ＋ Nuova macro
-      </button>
+    <div className="macro-screen">
+      <div className="macro-head">
+        <div>
+          <h2>Macro</h2>
+          <span className="muted-sm">{macros.length} / 12 salvate sull&apos;ESP</span>
+        </div>
+        <div className="macro-head-actions">
+          {macros.length > 0 && (
+            <button
+              type="button"
+              className={`btn-secondary sm ${editMode ? 'active' : ''}`}
+              onClick={() => {
+                setEditMode((e) => !e);
+                setConfirmDel(null);
+              }}
+            >
+              {editMode ? 'Fine' : 'Gestisci'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn-primary sm"
+            disabled={macros.length >= 12}
+            onClick={() => {
+              setEditMode(false);
+              setEditing({ id: '', steps: [] });
+            }}
+          >
+            <IconPlus size={16} />
+            <span>Nuova</span>
+          </button>
+        </div>
+      </div>
 
-      {macros.length === 0 && (
-        <p className="hint">
-          Nessuna macro salvata nell'ESP. Una macro è una sequenza di tasti, testo,
-          media e pause: utile per comandi ripetitivi.
-        </p>
-      )}
+      {macros.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">
+            <IconMacro size={28} />
+          </div>
+          <h3>Nessuna macro salvata</h3>
+          <p className="muted">
+            Crea scorciatoie multi-step (tasti, testo, comandi media e pause) salvate direttamente nella memoria dell&apos;ESP32.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => setEditing({ id: '', steps: [] })}
+          >
+            <IconPlus size={17} />
+            <span>Crea la prima macro</span>
+          </button>
+        </div>
+      ) : (
+        <div className="macro-grid">
+          {macros.map((id) => {
+            const isRunning = busy === id;
+            const isConfirming = confirmDel === id;
 
-      <ul className="macro-list">
-        {macros.map((id) => (
-          <li key={id} className="macro-item">
-            <span className="macro-name">{id}</span>
-            <span className="macro-actions">
+            if (editMode) {
+              return (
+                <div key={id} className="macro-card editing">
+                  <span className="macro-card-title">{id}</span>
+                  <div className="macro-card-tools">
+                    <button
+                      type="button"
+                      className="btn-secondary sm"
+                      onClick={() => edit(id)}
+                    >
+                      <IconEdit size={15} />
+                      <span>Modifica</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-danger sm ${isConfirming ? 'armed' : ''}`}
+                      onClick={() => remove(id)}
+                    >
+                      <IconTrash size={15} />
+                      <span>{isConfirming ? 'Sicuro?' : ''}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
               <button
-                className="key macro-btn"
+                key={id}
+                type="button"
+                className={`macro-card ${isRunning ? 'running' : ''}`}
                 disabled={busy !== null}
                 onClick={() => run(id)}
               >
-                {busy === id ? '…' : '▶'}
+                <span className="macro-card-icon">
+                  <IconMacro size={18} />
+                </span>
+                <span className="macro-card-title">{id}</span>
+                <span className="macro-card-sub">
+                  {isRunning ? 'In esecuzione…' : 'Tocca per eseguire'}
+                </span>
               </button>
-              <button className="key macro-btn" onClick={() => edit(id)}>✎</button>
-              <button className="key macro-btn danger" onClick={() => remove(id)}>🗑</button>
-            </span>
-          </li>
-        ))}
-      </ul>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -178,19 +286,25 @@ function MacroEditor({
   const [wait, setWait] = useState(500);
   const [mediaIdx, setMediaIdx] = useState(0);
 
+  const pushStep = (step: MacroStep) => {
+    if (editing.steps.length >= 64) return;
+    onChange({ ...editing, steps: [...editing.steps, step] });
+  };
+
   const addStep = () => {
-    let step: MacroStep;
     if (stepType === 'key') {
-      step = { k: KEY_OPTIONS[keyIdx].code, ...(mods ? { m: mods } : {}) };
+      const code = KEY_OPTIONS[keyIdx].code;
+      if (code === 0 && mods === 0) return;
+      pushStep({ k: code, ...(mods ? { m: mods } : {}) });
     } else if (stepType === 'text') {
       if (!text) return;
-      step = { s: text };
+      pushStep({ s: text });
+      setText('');
     } else if (stepType === 'media') {
-      step = { c: MEDIA_OPTIONS[mediaIdx].code };
+      pushStep({ c: MEDIA_OPTIONS[mediaIdx].code });
     } else {
-      step = { w: Math.max(0, Math.min(60000, wait)) };
+      pushStep({ w: Math.max(0, Math.min(60000, wait)) });
     }
-    onChange({ ...editing, steps: [...editing.steps, step] });
   };
 
   const move = (i: number, dir: -1 | 1) => {
@@ -210,96 +324,179 @@ function MacroEditor({
 
   return (
     <div className="macro-editor">
-      <label>
-        Nome (a-z, 0-9, - _)
+      <div className="macro-head">
+        <h2>{editing.id ? `Macro: ${editing.id}` : 'Nuova macro'}</h2>
+        <button type="button" className="icon-btn" onClick={onCancel} aria-label="Annulla">
+          <IconClose size={20} />
+        </button>
+      </div>
+
+      <label className="field">
+        <span>Nome macro <small className="muted">(a-z, 0-9, - _)</small></span>
         <input
           type="text"
           value={editing.id}
           onChange={(e) => onChange({ ...editing, id: e.target.value })}
-          placeholder="es. netflix"
+          placeholder="es. netflix, accedi, copia-url"
           maxLength={20}
+          autoCapitalize="off"
           spellCheck={false}
         />
       </label>
 
-      <ol className="macro-steps">
-        {editing.steps.map((s, i) => (
-          <li key={i}>
-            <span className="macro-step-label">{stepLabel(s)}</span>
-            <span className="macro-actions">
-              <button className="key macro-btn" onClick={() => move(i, -1)}>↑</button>
-              <button className="key macro-btn" onClick={() => move(i, 1)}>↓</button>
-              <button className="key macro-btn danger" onClick={() => removeStep(i)}>✕</button>
-            </span>
-          </li>
-        ))}
-        {editing.steps.length === 0 && <li className="muted">nessuno step: aggiungilo sotto</li>}
-      </ol>
+      {!idOk && editing.id.length > 0 && (
+        <p className="callout warn">Usa solo lettere, cifre, trattini o underscore (1–20 caratteri).</p>
+      )}
 
-      <div className="macro-add">
-        <select value={stepType} onChange={(e) => setStepType(e.target.value as StepType)}>
-          <option value="key">Tasto</option>
-          <option value="text">Testo</option>
-          <option value="media">Media</option>
-          <option value="wait">Attesa</option>
-        </select>
+      {/* Inserimento rapido */}
+      <div className="editor-card">
+        <div className="editor-card-head">
+          <span>Aggiungi step</span>
+          <span className="muted-sm">{editing.steps.length} / 64</span>
+        </div>
 
-        {stepType === 'key' && (
-          <>
-            <select value={keyIdx} onChange={(e) => setKeyIdx(Number(e.target.value))}>
-              {KEY_OPTIONS.map((o, i) => (
+        <div className="shortcut-strip">
+          {QUICK_STEPS.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              className="shortcut-pill"
+              onClick={() => pushStep(q.step)}
+            >
+              ＋ {q.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="segmented compact">
+          {([
+            ['key', 'Tasto'],
+            ['text', 'Testo'],
+            ['media', 'Media'],
+            ['wait', 'Attesa'],
+          ] as [StepType, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              className={`seg-btn ${stepType === t ? 'active' : ''}`}
+              onClick={() => setStepType(t)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="editor-builder">
+          {stepType === 'key' && (
+            <>
+              <select value={keyIdx} onChange={(e) => setKeyIdx(Number(e.target.value))}>
+                {KEY_OPTIONS.map((o, i) => (
+                  <option key={o.code} value={i}>{o.label}</option>
+                ))}
+              </select>
+              <div className="kb-mods compact">
+                {(['Ctrl', 'Shift', 'Alt', 'Win'] as const).map((label, bi) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`key mod ${(mods & (1 << bi)) ? 'active' : ''}`}
+                    onClick={() => setMods((m) => m ^ (1 << bi))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {stepType === 'text' && (
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Testo da digitare (ASCII)"
+            />
+          )}
+
+          {stepType === 'media' && (
+            <select value={mediaIdx} onChange={(e) => setMediaIdx(Number(e.target.value))}>
+              {MEDIA_OPTIONS.map((o, i) => (
                 <option key={o.code} value={i}>{o.label}</option>
               ))}
             </select>
-            <span className="macro-mods">
-              {(['Ctrl', 'Shift', 'Alt', 'Win'] as const).map((label, bi) => (
-                <button
-                  key={label}
-                  className={`key mod ${(mods & (1 << bi)) ? 'active' : ''}`}
-                  onClick={() => setMods((m) => m ^ (1 << bi))}
-                >
-                  {label}
-                </button>
-              ))}
-            </span>
-          </>
-        )}
-        {stepType === 'text' && (
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="testo da digitare (ASCII)"
-          />
-        )}
-        {stepType === 'media' && (
-          <select value={mediaIdx} onChange={(e) => setMediaIdx(Number(e.target.value))}>
-            {MEDIA_OPTIONS.map((o, i) => (
-              <option key={o.code} value={i}>{o.label}</option>
-            ))}
-          </select>
-        )}
-        {stepType === 'wait' && (
-          <input
-            type="number"
-            value={wait}
-            min={0}
-            max={60000}
-            step={100}
-            onChange={(e) => setWait(Number(e.target.value))}
-          />
-        )}
+          )}
 
-        <button className="key" onClick={addStep}>＋ aggiungi step</button>
+          {stepType === 'wait' && (
+            <div className="wait-row">
+              <input
+                type="number"
+                value={wait}
+                min={0}
+                max={60000}
+                step={100}
+                onChange={(e) => setWait(Number(e.target.value))}
+              />
+              <span className="muted">ms</span>
+            </div>
+          )}
+
+          <button type="button" className="btn-secondary full" onClick={addStep}>
+            <IconPlus size={16} />
+            <span>Aggiungi step</span>
+          </button>
+        </div>
       </div>
+
+      {/* Lista step */}
+      <ol className="macro-steps">
+        {editing.steps.map((s, i) => (
+          <li key={i} className="macro-step-row">
+            <span className="step-num">{i + 1}</span>
+            <span className="step-badge">{stepBadge(s)}</span>
+            <span className="step-text">{stepLabel(s)}</span>
+            <span className="step-actions">
+              <button
+                type="button"
+                className="step-btn"
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+                aria-label="Sposta su"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="step-btn"
+                disabled={i === editing.steps.length - 1}
+                onClick={() => move(i, 1)}
+                aria-label="Sposta giù"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="step-btn danger"
+                onClick={() => removeStep(i)}
+                aria-label="Elimina step"
+              >
+                ✕
+              </button>
+            </span>
+          </li>
+        ))}
+        {editing.steps.length === 0 && (
+          <li className="macro-step-empty">Nessuno step: aggiungine almeno uno sopra.</li>
+        )}
+      </ol>
 
       <div className="macro-editor-actions">
-        <button className="primary" disabled={!canSave} onClick={onSave}>
-          Salva nell'ESP
+        <button type="button" className="btn-secondary" onClick={onCancel}>
+          Annulla
         </button>
-        <button className="key" onClick={onCancel}>Annulla</button>
+        <button type="button" className="btn-primary" disabled={!canSave} onClick={onSave}>
+          Salva sull&apos;ESP
+        </button>
       </div>
-      {!idOk && <p className="warn">Nome non valido (1-20 caratteri [a-zA-Z0-9_-])</p>}
     </div>
   );
 }
