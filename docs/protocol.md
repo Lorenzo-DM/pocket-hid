@@ -24,7 +24,7 @@ ESP  ->  { "t": "welcome", "v": 1, "fw": "0.1.0", "layout": "it",
 
 | t (type) | Campi | Note |
 |---|---|---|
-| `key` | `code`, `mods`, `act` | `act`: `d`=down, `u`=up, `t`=tap |
+| `key` | `code`, `mods`, `act` | `act`: `d`=down, `u`=up, `t`=tap (`code=0` con `mods!=0` = solo modificatore, es. tasto Win/Super) |
 | `text` | `s`, [`i`, `n`] | stringa da digitare; `i`/`n` = chunk indice/totale (BLE) |
 | `consumer` | `code` | media keys (pagina 0x0C) |
 | `mouse` | `dx`, `dy` | movimento relativo, int16 |
@@ -52,7 +52,7 @@ Esempio:
   "steps": [ {"s":"netflix.com"}, {"k":0x28}, {"w":2000}, {"c":0xcd} ] }
 ```
 
-Limiti firmware: id `[a-zA-Z0-9_-]` 1–20 char, max 12 macro, max 64 step, blob ≤ 2 KB.
+Limiti firmware: id `[a-zA-Z0-9_-]` 1–20 char (escluso `"__idx"`), max 12 macro, 1–64 step, blob ≤ 2 KB.
 Al termine dell'esecuzione l'ESP invia `{"t":"macro_done","id":"..."}`.
 | `state` | — | richiede diagnostica |
 
@@ -121,9 +121,11 @@ Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
 - **RX char** (app → ESP): `7a0c1001-…` — write e write-without-response (per `mouse` fire-and-forget), **richiede cifratura** (il pairing avviene prima di ogni write)
 - **TX char** (ESP → app): `7a0c1002-…` — notify, cifrata
 - **Device name**: `MK-Remote`; lo scan dell'app filtra per presence del service UUID
-- **MTU**: richiesto 247; messaggi JSON > MTU: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 2KB, overflow → errore e reset)
+- **MTU**: richiesto 247; messaggi JSON > `MTU - 3`:
+  - **RX (app → ESP)**: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 2560 B per contenere `macro_save` al limite, overflow → errore e reset).
+  - **TX (ESP → app)**: se una risposta supera `MTU - 3` (es. `macro_data` grande), l'ESP la spezza in più notify sequenziali e l'app (`BleBase`) riassembla i chunk (buffer 4 KB, timeout 1,5 s).
 - **Connection interval**: richiesto 7.5–15ms per mouse fluido
-- **Sicurezza**: pairing/bonding obbligatorio (flag ENC sulle characteristic); l'handshake `hello` resta identico ma senza token (il pairing fa da auth)
+- **Sicurezza**: pairing/bonding obbligatorio (`WRITE_ENC` su RX + verifica `isEncrypted()` in `onWrite`); l'handshake `hello` resta identico ma senza token (il pairing fa da auth)
 - **Doppio hello**: su ogni riconnessione serve un nuovo `hello`
 
 ## 6. Trasporti di rete (WebSocket / portal)
@@ -131,23 +133,23 @@ Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
 ### WebSocket
 
 - Endpoint: `ws://<ip>:80/ws`
-- **Auth**: l'ESP attende `hello`+token valido entro timeout, altrimenti chiude
+- **Auth**: per-client; l'ESP attende `hello` (`v: 1`) + `token` valido entro 5 s, altrimenti chiude la connessione
 - **Heartbeat**: `{t:"state"}` ogni ~15s dall'app; riconnessione con backoff esponenziale
 - **Scoperta**: mDNS `esp32-hid.local` su rete di casa
 
 ### Hotspot AP + captive portal + config WiFi
 
-- L'ESP avvia sempre un AP: SSID `MK-Remote-XXXX` (ultimi byte MAC), WPA2 (pass compilato, `MK_AP_PASS`)
-- Connessione all'AP → captive portal → pagina di configurazione (`/`)
-- `POST /save` (`ssid`, `pass` form-urlencoded) → salva in NVS → riavvio automatico
+- L'AP `MK-Remote-XXXX` (ultimi byte MAC, WPA2 con `MK_AP_PASS`) è attivo on-demand: all'avvio, con credenziali mancanti/errate o dopo 15 s di caduta dello STA; si spegne quando lo STA ottiene un IP
+- Connessione all'AP → captive portal → pagina di configurazione (`/portal` se la PWA è montata su LittleFS, altrimenti `/`)
+- `POST /save` (`ssid`, `pass` form-urlencoded; richiede `token` via campo form, query `?token=` o header `X-MK-Token` se `MK_TOKEN` è configurato) → salva in NVS → riavvio automatico
 - `GET /wifi-info` → `{sta_ssid, sta_connected, ip, ap_ssid}`
 - Probe captive reindirizzate al portal (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, `/ncsi.txt`, `/fwlink`)
 - Le credenziali NVS hanno priorità su quelle compilate in `config_local.h` (che restano il fallback iniziale)
 
 ### OTA
 
-- `GET /update` → form upload; `POST /update` (multipart, campo `bin`) → flash e riavvio
-- Partizioni `min_spiffs` (due slot app); UI definitiva in fase 9
+- `GET /update` → form upload; `POST /update` (multipart, campo `bin`; protetto da `MK_TOKEN` via campo form `token`, query `?token=` o header `X-MK-Token` se configurato) → flash e riavvio differito
+- Partizioni custom `partitions_4mb.csv` (due slot OTA da 1,75 MB + 384 KB LittleFS per la PWA)
 
 ## 7. Convenzioni trasversali
 

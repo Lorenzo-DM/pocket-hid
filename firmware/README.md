@@ -13,40 +13,44 @@
 ```
 firmware/
 ├── platformio.ini
+├── partitions_4mb.csv
 ├── src/
-│   ├── config.h          # WiFi/token/fw version/AP (override via build_flags + config_local.h)
-│   ├── main.cpp          # init + loop
-│   ├── usb_hid.cpp/.h    # composite HID (TinyUSB): keyboard + mouse + consumer
+│   ├── config.h          # WiFi/token/fw version/AP + verifica token (override via config_local.h)
+│   ├── main.cpp          # init ordinato + loop principale (single-owner)
+│   ├── usb_hid.cpp/.h    # composite HID (TinyUSB): keyboard + mouse + consumer non-bloccante
+│   ├── kb_state.cpp/.h   # stato tastiera 6KRO (logica pura, testabile su host)
 │   ├── keymap.cpp/.h     # carattere → (keycode, shift), layout US
-│   ├── commands.cpp/.h   # router comandi condiviso WS/BLE (stato 6KRO, handler, status)
-│   ├── ws_server.cpp/.h  # trasporto WebSocket + portal routes + OTA
-│   ├── ble_server.cpp/.h # trasporto BLE GATT (NimBLE, pairing obbligatorio)
-│   ├── wifi_mgr.cpp/.h   # credenziali NVS + AP captive portal + config page
-│   └── macro.cpp/.h      # macro: NVS + player non-bloccante
+│   ├── macro_id.h        # limiti macro + validazione ID (esclude "__idx")
+│   ├── macro.cpp/.h      # macro: NVS + player non-bloccante su loopTask
+│   ├── commands.cpp/.h   # coda FreeRTOS + router comandi condiviso WS/BLE (single-owner)
+│   ├── ws_server.cpp/.h  # WebSocket (auth per-client, multi-frame) + HTTP/OTA + PWA LittleFS
+│   ├── ble_server.cpp/.h # BLE GATT (NimBLE, link cifrato, chunking RX/TX)
+│   └── wifi_mgr.cpp/.h   # credenziali NVS + AP captive portal + mDNS + riconnessione STA
+└── test/
+    └── test_core/        # test unitari native (`pio test -e native`)
 ```
 
-## Cosa è implementato (fasi 1–6)
+## Cosa è implementato
 
 - Composite HID USB (keyboard 6KRO + mouse + consumer/media keys)
-- Trasporti comandi: **WebSocket** (`ws://<ip>/ws`, token opzionale) e **BLE GATT**
-  (UUID custom, RX/TX cifrate → pairing obbligatorio, MTU 247, accumulo JSON multi-write)
-- **Router comandi condiviso** (`commands.cpp`): key, text (US/ASCII), consumer, mouse,
-  mbtn, scroll, state, macro_run/save/del/get
-- **Macro**: persistenza NVS, player non-bloccante su loop()
-- **WiFi**: credenziali in NVS (fallback a config compilata), AP `MK-Remote-XXXX` con
-  captive portal e pagina di configurazione, mDNS su rete di casa
-- **OTA**: `GET /update` + `POST /update` (multipart), partizioni min_spiffs (due slot)
-- Endpoint HTTP: `/status`, `/wifi-info`, `/update`, `/` (config portal)
+- Architettura **single-owner** su `loopTask` con coda FreeRTOS: i task `async_tcp`, `nimble_host` e WiFi non toccano direttamente USB HID, NVS o `DNSServer` e non eseguono `delay()`
+- Trasporti comandi: **WebSocket** (`ws://<ip>/ws`, auth per-client con timeout 5 s, multi-frame) e **BLE GATT** (UUID custom, pairing cifrato obbligatorio, MTU 247, chunking RX e TX)
+- **Router comandi condiviso** (`commands.cpp`): key, text (non-bloccante, US/ASCII), consumer, mouse (con coalescing), mbtn, scroll, state, macro_run/save/del/get
+- **Macro**: persistenza NVS con validazione al salvataggio, player non-bloccante su `loop()`
+- **WiFi**: credenziali in NVS (fallback a config compilata), AP `MK-Remote-XXXX` on-demand con captive portal (`/portal` con PWA, `/` senza PWA) e mDNS su rete di casa
+- **PWA da LittleFS** (`partitions_4mb.csv`: 2×1,75 MB OTA + 384 KB LittleFS)
+- **OTA**: `GET /update` + `POST /update` (multipart, protetto da `MK_TOKEN` se configurato, reboot differito su `loop()`)
+- Endpoint HTTP: `/status`, `/wifi-info`, `/update`, `/portal` (o `/`)
 
-Non ancora: layout IT, client BLE nell'app (fase 7), PWA servita dall'ESP (fase 8),
-UI OTA/ESP Web Tools (fase 9).
+Non ancora: layout IT lato firmware.
 
 ## Setup
 
 1. Installare PlatformIO (VS Code extension o `pip install platformio`)
-2. `pio run` per compilare, `pio run -t uploadfs` per la PWA su LittleFS (fase 8)
-3. Flash sulla porta UART (tenere libera la porta USB-OTG per l'HID)
-4. Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`)
+2. `pio run` per compilare, `pio run -t uploadfs` per la PWA su LittleFS
+3. `pio test -e native` per eseguire i test unitari su host (keymap, 6KRO, validazione macro, token)
+4. Flash sulla porta UART (tenere libera la porta USB-OTG per l'HID)
+5. Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`)
    oppure configurarle dal captive portal senza ricompilare
 
 ## Nota hardware
