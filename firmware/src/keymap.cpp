@@ -20,6 +20,7 @@
 #define K_SLASH 0x38
 
 bool keymap_char(char c, uint8_t* usage, bool* shift) {
+  if (!usage || !shift) return false;
   *shift = false;
 
   if (c >= 'a' && c <= 'z') { *usage = K_A + (c - 'a'); return true; }
@@ -32,7 +33,6 @@ bool keymap_char(char c, uint8_t* usage, bool* shift) {
     case '\n': *usage = K_ENTER; return true;
     case '\t': *usage = K_TAB;   return true;
 
-    case '1': *usage = K_ONE;   *shift = true;  return true;
     case '!': *usage = K_ONE;   *shift = true;  return true;
     case '@': *usage = K_ONE+1; *shift = true;  return true;
     case '#': *usage = K_ONE+2; *shift = true;  return true;

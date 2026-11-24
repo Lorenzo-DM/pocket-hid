@@ -5,140 +5,39 @@
 #include "keymap.h"
 
 static const char* NS = "mkmac";
-static const char* IDX_KEY = "__idx";
 
 static Preferences s_prefs;
 static bool s_begun = false;
 static void (*s_on_done)(const char*) = nullptr;
 
 // ---------------------------------------------------------------------------
-// Storage: ogni macro e' un blob JSON degli steps sotto la chiave = id.
-// L'elenco degli id sta in IDX_KEY come array JSON (perche' la lib Preferences
-// non espone l'enumerazione delle chiavi).
-// ---------------------------------------------------------------------------
-
-static bool valid_id(const char* id) {
-  size_t n = strlen(id);
-  if (n < 1 || n > MACRO_MAX_ID) return false;
-  for (const char* p = id; *p; ++p) {
-    char c = *p;
-    if (!(isalnum((unsigned char)c) || c == '-' || c == '_')) return false;
-  }
-  return true;
-}
-
-static bool load_index(JsonDocument& d) {
-  String s = s_prefs.getString(IDX_KEY, "[]");
-  return deserializeJson(d, s) == DeserializationError::Ok && d.is<JsonArray>();
-}
-
-static void save_index(JsonDocument& d) {
-  String out;
-  serializeJson(d, out);
-  s_prefs.putString(IDX_KEY, out);
-}
-
-void macro_begin() {
-  s_prefs.begin(NS, false);
-  s_begun = true;
-}
-
-void macro_fill_ids(JsonArray arr) {
-  if (!s_begun) return;
-  JsonDocument idx;
-  if (!load_index(idx)) return;
-  for (JsonVariant v : idx.as<JsonArray>()) {
-    const char* id = v | "";
-    // filtra eventuali orfani (blob assente)
-    if (id[0] && s_prefs.isKey(id)) arr.add(id);
-  }
-}
-
-bool macro_exists(const char* id) {
-  if (!s_begun || !valid_id(id)) return false;
-  return s_prefs.isKey(id);
-}
-
-String macro_blob(const char* id) {
-  if (!s_begun || !valid_id(id)) return "";
-  return s_prefs.getString(id, "");
-}
-
-void macro_set_on_done(void (*cb)(const char* id)) {
-  s_on_done = cb;
-}
-
-bool macro_save(const char* id, JsonArrayConst steps) {
-  if (!s_begun || !valid_id(id)) return false;
-  if (steps.isNull() || steps.size() > MACRO_MAX_STEPS) return false;
-
-  JsonDocument idx;
-  if (!load_index(idx)) return false;
-  bool known = s_prefs.isKey(id);
-  if (!known && idx.as<JsonArray>().size() >= MACRO_MAX_COUNT) return false;
-
-  String blob;
-  serializeJson(steps, blob);
-  if (blob.length() > MACRO_MAX_BLOB) return false;
-  if ((size_t)s_prefs.putString(id, blob) != blob.length()) return false;
-
-  if (!known) {
-    idx.as<JsonArray>().add(id);
-    save_index(idx);
-  }
-  return true;
-}
-
-bool macro_del(const char* id) {
-  if (!s_begun || !valid_id(id)) return false;
-  if (!s_prefs.isKey(id)) return false;
-  s_prefs.remove(id);
-
-  JsonDocument idx;
-  if (load_index(idx)) {
-    JsonArray out = idx.to<JsonArray>(); // ricostruisce filtrando
-    JsonDocument fresh;
-    JsonArray freshArr = fresh.to<JsonArray>();
-    for (const char* x : out) if (strcmp(x, id) != 0) freshArr.add(x);
-    save_index(fresh);
-  }
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// Player non-bloccante
+// Struttura step e parser (usato sia al salvataggio sia all'esecuzione)
 // ---------------------------------------------------------------------------
 
 struct Step {
   enum Type { KEY, TEXT, CONSUMER, WAIT } type;
-  uint8_t code = 0;   // KEY
-  uint8_t mods = 0;   // KEY
-  String text;        // TEXT
-  uint16_t code16 = 0;// CONSUMER
-  uint32_t wait = 0;  // WAIT
+  uint8_t code = 0;    // KEY
+  uint8_t mods = 0;    // KEY
+  String text;         // TEXT
+  uint16_t code16 = 0; // CONSUMER
+  uint32_t wait = 0;   // WAIT
 };
 
-static bool s_running = false;
-static char s_run_id[MACRO_MAX_ID + 1] = {0};
-static std::vector<Step> s_steps;
-static size_t s_idx = 0;
-static size_t s_textPos = 0;
-
-// micro-fasi di esecuzione: giu' -> attesa -> su -> attesa -> step successivo
-enum Phase { P_IDLE, P_KEY_DOWN, P_KEY_UP, P_CHAR_DOWN, P_CHAR_UP, P_PAUSE };
-static Phase s_phase = P_IDLE;
-static uint32_t s_deadline = 0;
-
 static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
-  if (src.size() > MACRO_MAX_STEPS) return false;
-  for (JsonObjectConst o : src) {
+  if (src.isNull() || src.size() == 0 || src.size() > MACRO_MAX_STEPS) return false;
+  out.clear();
+  out.reserve(src.size());
+  for (JsonVariantConst item : src) {
+    if (!item.is<JsonObjectConst>()) return false;
+    JsonObjectConst o = item.as<JsonObjectConst>();
     Step st;
     if (!o["k"].isNull()) {
       st.type = Step::KEY;
       st.code = o["k"] | 0;
-      st.mods = o["m"] | 0;
-      if (!st.code) return false;
+      st.mods = static_cast<uint8_t>((o["m"] | 0) & 0x0F);
+      if (!st.code && !st.mods) return false;
     } else if (!o["s"].isNull()) {
+      if (!o["s"].is<const char*>()) return false;
       st.type = Step::TEXT;
       st.text = o["s"].as<const char*>();
       if (st.text.length() == 0) return false;
@@ -155,7 +54,133 @@ static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
     }
     out.push_back(st);
   }
+  return !out.empty();
+}
+
+// ---------------------------------------------------------------------------
+// Storage: ogni macro e' un blob JSON degli steps sotto la chiave = id.
+// L'elenco degli id sta in MACRO_IDX_KEY come array JSON (perche' la lib
+// Preferences non espone l'enumerazione delle chiavi).
+// ---------------------------------------------------------------------------
+
+static bool load_index(JsonDocument& d) {
+  String s = s_prefs.getString(MACRO_IDX_KEY, "[]");
+  return deserializeJson(d, s) == DeserializationError::Ok && d.is<JsonArray>();
+}
+
+static void save_index(JsonDocument& d) {
+  String out;
+  serializeJson(d, out);
+  s_prefs.putString(MACRO_IDX_KEY, out);
+}
+
+static bool index_contains(JsonArrayConst arr, const char* id) {
+  for (JsonVariantConst v : arr) {
+    const char* x = v | "";
+    if (strcmp(x, id) == 0) return true;
+  }
+  return false;
+}
+
+void macro_begin() {
+  if (s_begun) return;
+  s_prefs.begin(NS, false);
+  s_begun = true;
+}
+
+void macro_fill_ids(JsonArray arr) {
+  if (!s_begun) return;
+  JsonDocument idx;
+  if (!load_index(idx)) return;
+  for (JsonVariant v : idx.as<JsonArray>()) {
+    const char* id = v | "";
+    // filtra eventuali orfani (blob assente) o id non validi
+    if (macro_valid_id(id) && s_prefs.isKey(id)) arr.add(id);
+  }
+}
+
+bool macro_exists(const char* id) {
+  if (!s_begun || !macro_valid_id(id)) return false;
+  return s_prefs.isKey(id);
+}
+
+String macro_blob(const char* id) {
+  if (!s_begun || !macro_valid_id(id)) return "";
+  return s_prefs.getString(id, "");
+}
+
+void macro_set_on_done(void (*cb)(const char* id)) {
+  s_on_done = cb;
+}
+
+bool macro_save(const char* id, JsonArrayConst steps) {
+  if (!s_begun || !macro_valid_id(id)) return false;
+
+  // Valida il formato degli step prima di scrivere in NVS
+  std::vector<Step> parsed;
+  if (!parse_steps(steps, parsed)) return false;
+
+  JsonDocument idx;
+  if (!load_index(idx)) return false;
+  JsonArray idxArr = idx.as<JsonArray>();
+
+  const bool inIndex = index_contains(idxArr, id);
+  if (!inIndex && idxArr.size() >= MACRO_MAX_COUNT) return false;
+
+  String blob;
+  serializeJson(steps, blob);
+  if (blob.length() > MACRO_MAX_BLOB) return false;
+  if (static_cast<size_t>(s_prefs.putString(id, blob)) != blob.length()) return false;
+
+  if (!inIndex) {
+    idxArr.add(id);
+    save_index(idx);
+  }
   return true;
+}
+
+bool macro_del(const char* id) {
+  if (!s_begun || !macro_valid_id(id)) return false;
+  if (!s_prefs.isKey(id)) return false;
+  s_prefs.remove(id);
+
+  JsonDocument idx;
+  if (load_index(idx)) {
+    JsonArray existing = idx.as<JsonArray>();
+    JsonDocument fresh;
+    JsonArray freshArr = fresh.to<JsonArray>();
+    for (JsonVariant v : existing) {
+      const char* x = v | "";
+      if (x[0] && strcmp(x, id) != 0) freshArr.add(x);
+    }
+    save_index(fresh);
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Player non-bloccante (avanzato esclusivamente da loopTask)
+// ---------------------------------------------------------------------------
+
+static bool s_running = false;
+static char s_run_id[MACRO_MAX_ID + 1] = {0};
+static std::vector<Step> s_steps;
+static size_t s_idx = 0;
+static size_t s_textPos = 0;
+
+// micro-fasi di esecuzione: giu' -> attesa -> su -> attesa -> step successivo
+enum Phase { P_IDLE, P_KEY_DOWN, P_CONSUMER_DOWN, P_TEXT, P_CHAR_DOWN };
+static Phase s_phase = P_IDLE;
+static bool s_waiting = false;
+static uint32_t s_deadline = 0;
+
+static void schedule_wait(uint32_t now, uint32_t ms) {
+  if (ms == 0) {
+    s_waiting = false;
+    return;
+  }
+  s_deadline = now + ms;
+  s_waiting = true;
 }
 
 bool macro_running() { return s_running; }
@@ -168,9 +193,10 @@ bool macro_start(const char* id) {
 
   JsonDocument doc;
   if (deserializeJson(doc, blob) != DeserializationError::Ok) return false;
+  if (!doc.is<JsonArray>()) return false;
 
   s_steps.clear();
-  if (!parse_steps(doc.as<JsonArray>(), s_steps)) {
+  if (!parse_steps(doc.as<JsonArrayConst>(), s_steps) || s_steps.empty()) {
     s_steps.clear();
     return false;
   }
@@ -179,110 +205,108 @@ bool macro_start(const char* id) {
   s_idx = 0;
   s_textPos = 0;
   s_phase = P_IDLE;
+  s_waiting = false;
+  s_deadline = 0;
   s_running = true;
   return true;
 }
 
 // Esegue un tasto tap in due micro-fasi (down / up) con report dedicati:
-// non tocca lo stato 6KRO del ws_server, usa report diretti.
+// non altera lo stato 6KRO interattivo, usa report diretti.
 static void player_report_key(uint8_t code, uint8_t mods, bool down) {
   uint8_t keys[6] = {0};
-  if (down) keys[0] = code;
-  kb_send(mods, keys);
+  if (down && code != 0) keys[0] = code;
+  kb_send(down ? mods : 0, keys);
 }
 
 void macro_tick() {
   if (!s_running) return;
 
-  uint32_t now = millis();
+  const uint32_t now = millis();
 
-  // attesa in corso?
-  if (s_deadline != 0) {
-    if ((int32_t)(now - s_deadline) < 0) return;
+  // attesa in corso? (confronto signed immune al wraparound di millis())
+  if (s_waiting) {
+    if (static_cast<int32_t>(now - s_deadline) < 0) return;
+    s_waiting = false;
+  }
+
+  // Completamento controllato DOPO l'eventuale attesa finale (incluso Step::WAIT finale)
+  if (s_idx >= s_steps.size()) {
+    s_running = false;
+    s_waiting = false;
     s_deadline = 0;
+    s_steps.clear();
+    s_phase = P_IDLE;
+    if (s_on_done) s_on_done(s_run_id);
+    return;
   }
 
   const Step& st = s_steps[s_idx];
 
   switch (s_phase) {
-    case P_IDLE: {
+    case P_IDLE:
       switch (st.type) {
         case Step::KEY:
           player_report_key(st.code, st.mods, true);
           s_phase = P_KEY_DOWN;
-          s_deadline = now + 8;
+          schedule_wait(now, st.code == 0 ? 25 : 8);
           return;
+
         case Step::TEXT:
           s_textPos = 0;
-          s_phase = P_PAUSE; // cade nel testo al prossimo giro
+          s_phase = P_TEXT;
           return;
+
         case Step::CONSUMER:
-          consumer_send(st.code16);
-          s_idx++;
-          s_deadline = now + 10;
-          if (s_idx >= s_steps.size()) goto finished;
+          consumer_press(st.code16);
+          s_phase = P_CONSUMER_DOWN;
+          schedule_wait(now, 5);
           return;
+
         case Step::WAIT:
           s_idx++;
-          if (st.wait > 0) s_deadline = now + st.wait;
-          if (s_idx >= s_steps.size()) goto finished;
+          schedule_wait(now, st.wait);
           return;
       }
       break;
-    }
 
     case P_KEY_DOWN:
-      player_report_key(st.code, st.mods, false);
-      s_phase = P_KEY_UP;
-      s_deadline = now + 8;
-      return;
-
-    case P_KEY_UP:
+      player_report_key(0, 0, false);
       s_phase = P_IDLE;
       s_idx++;
-      s_deadline = now + 8;
-      if (s_idx >= s_steps.size()) goto finished;
+      schedule_wait(now, 16); // pausa rilascio + gap tra step
       return;
 
-    case P_PAUSE: {
-      // avanzamento del testo, un carattere per giro
-      if (st.type == Step::TEXT && s_textPos < st.text.length()) {
-        uint8_t usage; bool shift;
+    case P_CONSUMER_DOWN:
+      consumer_release();
+      s_phase = P_IDLE;
+      s_idx++;
+      schedule_wait(now, 10);
+      return;
+
+    case P_TEXT:
+      // salta eventuali caratteri non mappati senza stallo
+      while (s_textPos < st.text.length()) {
+        uint8_t usage = 0;
+        bool shift = false;
         if (keymap_char(st.text[s_textPos], &usage, &shift)) {
           player_report_key(usage, shift ? 0x02 : 0, true);
           s_phase = P_CHAR_DOWN;
-          s_deadline = now + 6;
-        } else {
-          s_textPos++; // carattere non mappato: salta
-          s_deadline = now + 1;
+          schedule_wait(now, 6);
+          return;
         }
-        return;
+        s_textPos++;
       }
-      // testo finito (o step atteso in P_PAUSE da consumer/testo): prossimo step
+      // testo terminato
       s_phase = P_IDLE;
       s_idx++;
-      if (s_idx >= s_steps.size()) goto finished;
       return;
-    }
 
     case P_CHAR_DOWN:
-      // rilascio: report con keys vuote e mods azzerati
       player_report_key(0, 0, false);
-      s_phase = P_CHAR_UP;
-      s_deadline = now + 6;
-      return;
-
-    case P_CHAR_UP:
       s_textPos++;
-      s_phase = P_PAUSE;
-      s_deadline = now + 6;
+      s_phase = P_TEXT;
+      schedule_wait(now, 12); // rilascio + gap tra caratteri
       return;
   }
-  return;
-
-finished:
-  s_running = false;
-  s_steps.clear();
-  s_phase = P_IDLE;
-  if (s_on_done) s_on_done(s_run_id);
 }

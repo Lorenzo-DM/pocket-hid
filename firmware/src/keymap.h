@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
 // Mappa carattere ASCII -> (HID usage code, shift), layout US.
 // I caratteri non mappati (accentati, non-ASCII) vengono saltati:

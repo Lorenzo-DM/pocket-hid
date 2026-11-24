@@ -56,6 +56,12 @@ bool mouse_button(uint8_t btn, bool down) {
   return mouse_move(0, 0);
 }
 
+bool mouse_release_all() {
+  if (s_buttons == 0) return true;
+  s_buttons = 0;
+  return mouse_move(0, 0);
+}
+
 bool mouse_scroll(int8_t dx, int8_t dy) {
   if (!usb_hid_mounted()) return false;
   // wheel = asse Y, pan = asse X
@@ -64,12 +70,21 @@ bool mouse_scroll(int8_t dx, int8_t dy) {
 
 // --- Consumer ---
 
-bool consumer_send(uint16_t code) {
+bool consumer_press(uint16_t code) {
   if (!usb_hid_mounted()) return false;
   const uint8_t rep[2] = { (uint8_t)(code & 0xFF), (uint8_t)(code >> 8) };
-  bool ok = hid_consumer.sendReport(0, rep, 2);
-  delay(5);
+  return hid_consumer.sendReport(0, rep, 2);
+}
+
+bool consumer_release() {
+  if (!usb_hid_mounted()) return false;
   const uint8_t zero[2] = {0, 0};
-  hid_consumer.sendReport(0, zero, 2);
-  return ok;
+  return hid_consumer.sendReport(0, zero, 2);
+}
+
+bool consumer_send(uint16_t code) {
+  if (!consumer_press(code)) return false;
+  delay(5);
+  consumer_release();
+  return true;
 }

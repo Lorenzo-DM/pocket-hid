@@ -2,23 +2,19 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "macro_id.h"
 
 // Macro: persistenza NVS (Preferences) + player non-bloccante.
+// Tutte le funzioni vanno chiamate esclusivamente dal loopTask (single-owner).
 // Il player viene avanzato da macro_tick() chiamato in loop(): non usa
-// delay() lunghi, così WebSocket e USB restano reattivi durante l'esecuzione.
+// delay(), così WebSocket, BLE e USB restano reattivi durante l'esecuzione.
 //
 // Formato step: v. docs/protocol.md ("Formato step macro").
-// Limiti: id [a-zA-Z0-9_-] 1-20 char, 12 macro, 64 step, blob <= 2 KB.
-
-#define MACRO_MAX_COUNT 12
-#define MACRO_MAX_STEPS 64
-#define MACRO_MAX_BLOB 2048
-#define MACRO_MAX_ID 20
-#define MACRO_MAX_WAIT_MS 60000
+// Limiti: id [a-zA-Z0-9_-] 1-20 char (escluso "__idx"), 12 macro, 64 step, blob <= 2 KB.
 
 void macro_begin();
 
-//Lista degli id salvati, nell'ordine di creazione
+// Lista degli id salvati, nell'ordine di creazione
 void macro_fill_ids(JsonArray arr);
 
 bool macro_save(const char* id, JsonArrayConst steps);

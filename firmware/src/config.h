@@ -1,5 +1,9 @@
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
 // Configurazione MK-Remote
 // Le credenziali reali NON si committano: mettile in config_local.h (gitignored)
 // oppure passale via -D in build_flags
@@ -29,7 +33,28 @@
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"
 #endif
 
-// Token opzionale per WebSocket. Vuoto = nessuna auth (solo per test iniziali).
+// Token opzionale per WebSocket, OTA (/update) e config WiFi (/save).
+// Vuoto = nessuna auth (solo per rete locale fidata / test iniziali).
 #ifndef MK_TOKEN
 #define MK_TOKEN ""
 #endif
+
+inline bool mk_token_enabled() {
+  const char* expected = MK_TOKEN;
+  return expected[0] != '\0';
+}
+
+// Confronto costante in tempo per verificare il token configurato.
+inline bool mk_token_valid(const char* candidate) {
+  if (!mk_token_enabled()) return true;
+  if (!candidate) return false;
+  const char* expected = MK_TOKEN;
+  const size_t lenA = strlen(expected);
+  const size_t lenB = strlen(candidate);
+  uint8_t diff = (lenA != lenB) ? 1 : 0;
+  const size_t n = (lenA < lenB) ? lenA : lenB;
+  for (size_t i = 0; i < n; ++i) {
+    diff |= static_cast<uint8_t>(expected[i] ^ candidate[i]);
+  }
+  return diff == 0;
+}
