@@ -1,67 +1,66 @@
-# Firmware ESP32-S3 — PocketHID
+# PocketHID Firmware (ESP32-S3)
 
 ## Stack
 
-- **PlatformIO** (framework Arduino)
-- **TinyUSB** (`Adafruit_TinyUSB_Arduino`): composite HID — keyboard + mouse + consumer control
-- **NimBLE** (`NimBLE-Arduino`): servizio GATT custom per i comandi dell'app
-- **ESPAsyncWebServer**: WebSocket + captive portal + OTA
-- **ArduinoJson**: parsing messaggi (schema in `docs/protocol.md`)
+- **PlatformIO** (Arduino framework on `espressif32`)
+- **TinyUSB** (`Adafruit_TinyUSB_Arduino`): composite USB HID — keyboard (6KRO) + mouse + consumer control
+- **NimBLE** (`NimBLE-Arduino@^2.2.0`): encrypted custom GATT service
+- **ESPAsyncWebServer**: WebSocket server, LittleFS PWA hosting, captive portal, and WiFi OTA
+- **ArduinoJson**: JSON protocol parsing (see [`docs/protocol.md`](../docs/protocol.md))
 
-## Struttura
+## Structure
 
-```
+```text
 firmware/
 ├── platformio.ini
 ├── partitions_4mb.csv
+├── scripts/
+│   └── patch_tinyusb.py  # pre-build hook ensuring CFG_TUD_HID >= 3
 ├── src/
-│   ├── config.h          # WiFi/token/fw version/AP + verifica token (override via config_local.h)
-│   ├── main.cpp          # init ordinato + loop principale (single-owner)
-│   ├── usb_hid.cpp/.h    # composite HID (TinyUSB): keyboard + mouse + consumer non-bloccante
-│   ├── kb_state.cpp/.h   # stato tastiera 6KRO (logica pura, testabile su host)
-│   ├── keymap.cpp/.h     # carattere → (keycode, shift), layout US
-│   ├── macro_id.h        # limiti macro + validazione ID (esclude "__idx")
-│   ├── macro.cpp/.h      # macro: NVS + player non-bloccante su loopTask
-│   ├── commands.cpp/.h   # coda FreeRTOS + router comandi condiviso WS/BLE (single-owner)
-│   ├── ws_server.cpp/.h  # WebSocket (auth per-client, multi-frame) + HTTP/OTA + PWA LittleFS
-│   ├── ble_server.cpp/.h # BLE GATT (NimBLE, link cifrato, chunking RX/TX)
-│   └── wifi_mgr.cpp/.h   # credenziali NVS + AP captive portal + mDNS + riconnessione STA
+│   ├── config.h          # defaults (override via gitignored config_local.h)
+│   ├── main.cpp          # ordered USB/transport init + single-owner loop
+│   ├── usb_hid.cpp/.h    # composite TinyUSB HID (keyboard, mouse, consumer)
+│   ├── kb_state.cpp/.h   # pure 6KRO keyboard state (host-testable)
+│   ├── keymap.cpp/.h     # UTF-8 -> HID keycode + modifiers (US & IT layouts, AltGr)
+│   ├── macro_id.h        # macro limits and ID validation
+│   ├── macro.cpp/.h      # NVS macro storage + non-blocking player
+│   ├── commands.cpp/.h   # FreeRTOS command queue + shared WS/BLE router
+│   ├── ws_server.cpp/.h  # WebSocket (per-client auth), HTTP/OTA, LittleFS PWA
+│   ├── ble_server.cpp/.h # NimBLE GATT server (encrypted pairing, RX/TX chunking)
+│   └── wifi_mgr.cpp/.h   # NVS WiFi creds, on-demand AP captive portal, mDNS
 └── test/
-    └── test_core/        # test unitari native (`pio test -e native`)
+    └── test_core/        # native host unit tests (`pio test -e native`)
 ```
 
-## Cosa è implementato
+## Architecture Highlights
 
-- Composite HID USB (keyboard 6KRO + mouse + consumer/media keys)
-- Architettura **single-owner** su `loopTask` con coda FreeRTOS: i task `async_tcp`, `nimble_host` e WiFi non toccano direttamente USB HID, NVS o `DNSServer` e non eseguono `delay()`
-- Trasporti comandi: **WebSocket** (`ws://<ip>/ws`, auth per-client con timeout 5 s, multi-frame) e **BLE GATT** (UUID custom, pairing cifrato obbligatorio, MTU 247, chunking RX e TX)
-- **Router comandi condiviso** (`commands.cpp`): key, text (non-bloccante, US/ASCII), consumer, mouse (con coalescing), mbtn, scroll, state, macro_run/save/del/get
-- **Macro**: persistenza NVS con validazione al salvataggio, player non-bloccante su `loop()`
-- **WiFi**: credenziali in NVS (fallback a config compilata), AP `PocketHID-XXXX` on-demand con captive portal (`/portal` con PWA, `/` senza PWA) e mDNS su rete di casa
-- **PWA da LittleFS** (`partitions_4mb.csv`: 2×1,75 MB OTA + 384 KB LittleFS)
-- **OTA**: `GET /update` + `POST /update` (multipart, protetto da `MK_TOKEN` se configurato, reboot differito su `loop()`)
-- Endpoint HTTP: `/status`, `/wifi-info`, `/update`, `/portal` (o `/`)
+- **Single-owner `loopTask`**: network (`async_tcp`) and BLE (`nimble_host`) tasks enqueue messages into a FreeRTOS queue; only `loopTask` touches USB HID, NVS, and `DNSServer` — zero `delay()` calls in callbacks.
+- **Automatic TinyUSB patch**: `scripts/patch_tinyusb.py` automatically sets `CFG_TUD_HID = 3` before compilation so all three HID interfaces (keyboard, mouse, consumer/media) enumerate reliably.
+- **US & IT keymaps**: UTF-8 text typing with Shift/AltGr support and runtime layout switching (`layout` command).
+- **4 MB partition layout** (`partitions_4mb.csv`): two 1.75 MB OTA slots + 384 KB LittleFS for the gzipped PWA (NVS stays at `0x9000` so saved WiFi credentials and macros persist across updates).
 
-Non ancora: layout IT lato firmware.
+## Build, Test & Flash
 
-## Setup
+```bash
+# Run native unit tests on host (keymap, 6KRO state, macro validation, token)
+cd firmware
+pio test -e native
 
-1. Installare PlatformIO (VS Code extension o `pip install platformio`)
-2. `pio run` per compilare, `pio run -t uploadfs` per la PWA su LittleFS
-3. `pio test -e native` per eseguire i test unitari su host (keymap, 6KRO, validazione macro, token)
-4. Flash sulla porta UART (tenere libera la porta USB-OTG per l'HID)
-5. Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`)
-   oppure configurarle dal captive portal senza ricompilare
+# Build firmware
+pio run -e esp32s3
 
-## Nota hardware
+# Flash firmware (use UART port on dual-USB boards, or download mode on single-USB boards)
+pio run -e esp32s3 -t upload
 
-Le dev board ESP32-S3 hanno due porte USB-C: usare la **UART** per sviluppo/log e la
-**USB-OTG** per l'HID verso il target. La power arriva dalla porta del target.
-Nota su questa board: **un solo connettore** USB-C (direct OTG) — v.
-`docs/troubleshooting.md` per flash in download mode e log.
+# Build and flash the LittleFS PWA (prepare firmware/data/ first via ../tools/deploy-pwa.sh --prep-only)
+pio run -e esp32s3 -t uploadfs
+```
 
-## Note versione NimBLE
+### Optional Pre-Configured WiFi & Auth Token
 
-`NimBLE-Arduino@^2.x` richiede Arduino core 3.x (platform espressif32 recente).
-Con core 2.x degradare a `~1.4.3` e adattare le API in `ble_server.cpp`
-(nomi callback e firme `notify()` cambiano).
+Copy `firmware/src/config_local.h.example` to `firmware/src/config_local.h` (gitignored) to bake WiFi credentials or a `MK_TOKEN` into the build, or configure WiFi at runtime through the captive portal (`PocketHID-XXXX`, default password `pockethid1`).
+
+## Hardware Notes
+
+- **Dual-USB boards**: use the **UART** port for flashing/serial logs and the **USB-OTG** port for HID toward the target.
+- **Single-USB boards** (direct OTG): hold **BOOT** while plugging in USB to enter download mode, flash, then **unplug and replug** the cable to start the firmware. See [`docs/troubleshooting.md`](../docs/troubleshooting.md) for details.
