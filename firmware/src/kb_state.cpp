@@ -14,8 +14,7 @@ int KbState::find_key(uint8_t code) const {
 }
 
 bool KbState::key_down(uint8_t code, uint8_t mod_mask) {
-  const uint8_t m = mod_mask & 0x0F;
-  if (code == 0 && m == 0) return false;
+  if (code == 0 && mod_mask == 0) return false;
   if (code != 0 && find_key(code) < 0) {
     int slot = -1;
     for (int i = 0; i < 6; ++i) {
@@ -27,7 +26,7 @@ bool KbState::key_down(uint8_t code, uint8_t mod_mask) {
     if (slot < 0) return false; // 7° tasto: ignorato (6KRO)
     keys[slot] = code;
   }
-  mods |= m;
+  mods |= mod_mask;
   return true;
 }
 
@@ -36,5 +35,5 @@ void KbState::key_up(uint8_t code, uint8_t mod_mask) {
     const int i = find_key(code);
     if (i >= 0) keys[i] = 0;
   }
-  mods &= static_cast<uint8_t>(~(mod_mask & 0x0F));
+  mods &= static_cast<uint8_t>(~mod_mask);
 }

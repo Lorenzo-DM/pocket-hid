@@ -1,6 +1,7 @@
 #include "commands.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <stdlib.h>
@@ -79,6 +80,7 @@ static size_t s_textPos = 0;
 static TextPhase s_textPhase = TP_IDLE;
 static uint8_t s_textCurUsage = 0;
 static uint8_t s_textCurMods = 0;
+static size_t s_textCurConsumed = 1;
 static uint32_t s_textDeadline = 0;
 
 // ---------------------------------------------------------------------------
@@ -110,7 +112,7 @@ static void fill_status_fields(JsonDocument& d, const char* type) {
   d["t"] = type;
   d["v"] = 1;
   d["fw"] = MK_FW_VERSION;
-  d["layout"] = "us"; // layout IT/US completo in fase successiva
+  d["layout"] = keymap_layout_name();
   d["usb"] = usb_hid_mounted() ? "mounted" : "unmounted";
   d["ble"] = ble_server_client_count();
   JsonArray macros = d["macros"].to<JsonArray>();
@@ -145,6 +147,15 @@ void commands_set_ble_transport(TransportSendFn send, BroadcastFn broadcast) {
 void commands_init() {
   if (!s_queue) {
     s_queue = xQueueCreate(CMD_QUEUE_LEN, sizeof(QueuedEvent));
+  }
+  Preferences cfg;
+  if (cfg.begin("mkcfg", true)) {
+    String saved = cfg.getString("layout", "us");
+    cfg.end();
+    KeyLayout l;
+    if (keymap_parse_layout(saved.c_str(), &l)) {
+      keymap_set_layout(l);
+    }
   }
   macro_begin();
   macro_set_on_done(on_macro_done);
@@ -344,6 +355,24 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
     JsonDocument d;
     fill_status_fields(d, "state");
     reply_doc(src, peerId, d);
+  } else if (!strcmp(t, "layout")) {
+    KeyLayout nextLayout;
+    if (!keymap_parse_layout(o["layout"] | "", &nextLayout)) {
+      reply_error(src, peerId, "layout non supportato (usa 'us' o 'it')");
+      return;
+    }
+    keymap_set_layout(nextLayout);
+    Preferences cfg;
+    if (cfg.begin("mkcfg", false)) {
+      cfg.putString("layout", keymap_layout_name());
+      cfg.end();
+    }
+    JsonDocument d;
+    fill_status_fields(d, "state");
+    String out;
+    serializeJson(d, out);
+    if (s_ws_bc) s_ws_bc(out.c_str());
+    if (s_ble_bc) s_ble_bc(out.c_str());
   } else if (!strcmp(t, "macro_run")) {
     if (macro_running()) {
       reply_error(src, peerId, "macro gia' in esecuzione");
@@ -398,7 +427,7 @@ static void tick_text(uint32_t now) {
     if (static_cast<int32_t>(now - s_textDeadline) < 0) return;
     s_kb.key_up(s_textCurUsage, s_textCurMods);
     kb_apply();
-    s_textPos++;
+    s_textPos += s_textCurConsumed;
     s_textPhase = TP_GAP;
     s_textDeadline = now + 6;
     return;
@@ -409,16 +438,18 @@ static void tick_text(uint32_t now) {
     s_textPhase = TP_IDLE;
   }
 
-  // TP_IDLE: consuma il prossimo carattere mappabile
+  // TP_IDLE: consuma il prossimo codepoint UTF-8 mappabile
   while (s_textPos < s_textBuf.size()) {
+    size_t consumed = 1;
     uint8_t usage = 0;
-    bool shift = false;
-    if (keymap_char(s_textBuf[s_textPos], &usage, &shift)) {
-      const uint8_t mods = shift ? 0x02 : 0;
+    uint8_t mods = 0;
+    if (keymap_next_utf8(s_textBuf.data() + s_textPos, s_textBuf.size() - s_textPos,
+                         &consumed, &usage, &mods)) {
       if (s_kb.key_down(usage, mods)) {
         kb_apply();
         s_textCurUsage = usage;
         s_textCurMods = mods;
+        s_textCurConsumed = consumed;
         s_textPhase = TP_DOWN;
         s_textDeadline = now + 8;
         return;
@@ -426,7 +457,7 @@ static void tick_text(uint32_t now) {
       // 6KRO pieno: riprova al prossimo tick
       return;
     }
-    s_textPos++;
+    s_textPos += consumed;
   }
 
   if (s_textPos >= s_textBuf.size() && !s_textBuf.empty()) {

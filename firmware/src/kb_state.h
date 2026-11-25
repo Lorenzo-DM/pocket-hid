@@ -10,8 +10,9 @@ struct KbState {
   void clear();
   int find_key(uint8_t code) const;
 
-  // Registra pressione; ritorna false se (code==0 && (mod_mask&0x0F)==0) oppure
+  // Registra pressione; ritorna false se (code==0 && mod_mask==0) oppure
   // se tutti e 6 gli slot sono occupati (7° tasto ignorato).
+  // Supporta l'intero byte modificatori HID (incluso AltGr = 0x40).
   bool key_down(uint8_t code, uint8_t mod_mask);
 
   // Registra rilascio del tasto e dei modificatori indicati.

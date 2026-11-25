@@ -42,6 +42,7 @@ static int s_failures = 0;
 static void test_keymap_basic() {
   uint8_t u = 0;
   bool sh = false;
+  keymap_set_layout(KeyLayout::US);
 
   EXPECT_TRUE(keymap_char('a', &u, &sh));
   EXPECT_EQ(0x04, u);
@@ -87,6 +88,57 @@ static void test_keymap_basic() {
   EXPECT_FALSE(keymap_char('a', &u, nullptr));
 }
 
+static void test_keymap_it_utf8() {
+  KeyLayout parsed = KeyLayout::US;
+  EXPECT_TRUE(keymap_parse_layout("it", &parsed));
+  EXPECT_EQ(static_cast<uint32_t>(KeyLayout::IT), static_cast<uint32_t>(parsed));
+  EXPECT_FALSE(keymap_parse_layout("de", &parsed));
+
+  keymap_set_layout(KeyLayout::IT);
+
+  size_t consumed = 0;
+  uint8_t u = 0;
+  uint8_t m = 0;
+
+  // Simboli IT specifici: '-', '/', '@', '{', '<', '>'
+  EXPECT_TRUE(keymap_next_utf8("-", 1, &consumed, &u, &m));
+  EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x38, u); EXPECT_EQ(0x00, m);
+
+  EXPECT_TRUE(keymap_next_utf8("/", 1, &consumed, &u, &m));
+  EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x24, u); EXPECT_EQ(HID_MOD_LSHIFT, m);
+
+  EXPECT_TRUE(keymap_next_utf8("@", 1, &consumed, &u, &m));
+  EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x33, u); EXPECT_EQ(HID_MOD_ALTGR, m);
+
+  EXPECT_TRUE(keymap_next_utf8("{", 1, &consumed, &u, &m));
+  EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x2F, u); EXPECT_EQ(HID_MOD_LSHIFT | HID_MOD_ALTGR, m);
+
+  EXPECT_TRUE(keymap_next_utf8("<", 1, &consumed, &u, &m));
+  EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x64, u); EXPECT_EQ(0x00, m);
+
+  // Accenti UTF-8 (2 byte): à (C3 A0), è (C3 A8), é (C3 A9), ù (C3 B9)
+  const char* agrave = "\xC3\xA0";
+  EXPECT_TRUE(keymap_next_utf8(agrave, 2, &consumed, &u, &m));
+  EXPECT_EQ(size_t{2}, consumed); EXPECT_EQ(0x34, u); EXPECT_EQ(0x00, m);
+
+  const char* eacute = "\xC3\xA9";
+  EXPECT_TRUE(keymap_next_utf8(eacute, 2, &consumed, &u, &m));
+  EXPECT_EQ(size_t{2}, consumed); EXPECT_EQ(0x2F, u); EXPECT_EQ(HID_MOD_LSHIFT, m);
+
+  // Euro UTF-8 (3 byte): € (E2 82 AC) -> AltGr + E (0x08)
+  const char* euro = "\xE2\x82\xAC";
+  EXPECT_TRUE(keymap_next_utf8(euro, 3, &consumed, &u, &m));
+  EXPECT_EQ(size_t{3}, consumed); EXPECT_EQ(0x08, u); EXPECT_EQ(HID_MOD_ALTGR, m);
+
+  // Emoji 4 byte: saltata consumando tutti e 4 i byte
+  const char* emoji = "\xF0\x9F\x98\x80";
+  EXPECT_FALSE(keymap_next_utf8(emoji, 4, &consumed, &u, &m));
+  EXPECT_EQ(size_t{4}, consumed);
+
+  // Ripristina US
+  keymap_set_layout(KeyLayout::US);
+}
+
 // ---------------------------------------------------------------------------
 // Test KbState (6KRO)
 // ---------------------------------------------------------------------------
@@ -96,7 +148,12 @@ static void test_kb_state_6kro() {
 
   // Nessun tasto ne' modificatore -> rifiutato
   EXPECT_FALSE(kb.key_down(0, 0));
-  EXPECT_FALSE(kb.key_down(0, 0xF0)); // bit alti mascherati
+
+  // AltGr (Right Alt = 0x40) supportato per layout IT
+  EXPECT_TRUE(kb.key_down(0x33, 0x40));
+  EXPECT_EQ(0x40, kb.mods);
+  kb.key_up(0x33, 0x40);
+  EXPECT_EQ(0x00, kb.mods);
 
   // Solo modificatore (es. Win/Super = 0x08)
   EXPECT_TRUE(kb.key_down(0, 0x08));
@@ -171,12 +228,14 @@ int main() {
 #ifdef PIO_UNIT_TESTING
   UNITY_BEGIN();
   RUN_TEST(test_keymap_basic);
+  RUN_TEST(test_keymap_it_utf8);
   RUN_TEST(test_kb_state_6kro);
   RUN_TEST(test_macro_valid_id);
   RUN_TEST(test_token_validation);
   return UNITY_END();
 #else
   test_keymap_basic();
+  test_keymap_it_utf8();
   test_kb_state_6kro();
   test_macro_valid_id();
   test_token_validation();

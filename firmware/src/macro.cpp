@@ -34,7 +34,7 @@ static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
     if (!o["k"].isNull()) {
       st.type = Step::KEY;
       st.code = o["k"] | 0;
-      st.mods = static_cast<uint8_t>((o["m"] | 0) & 0x0F);
+      st.mods = static_cast<uint8_t>(o["m"] | 0);
       if (!st.code && !st.mods) return false;
     } else if (!o["s"].isNull()) {
       if (!o["s"].is<const char*>()) return false;
@@ -211,6 +211,8 @@ bool macro_start(const char* id) {
   return true;
 }
 
+static size_t s_textCurConsumed = 1;
+
 // Esegue un tasto tap in due micro-fasi (down / up) con report dedicati:
 // non altera lo stato 6KRO interattivo, usa report diretti.
 static void player_report_key(uint8_t code, uint8_t mods, bool down) {
@@ -287,15 +289,18 @@ void macro_tick() {
     case P_TEXT:
       // salta eventuali caratteri non mappati senza stallo
       while (s_textPos < st.text.length()) {
+        size_t consumed = 1;
         uint8_t usage = 0;
-        bool shift = false;
-        if (keymap_char(st.text[s_textPos], &usage, &shift)) {
-          player_report_key(usage, shift ? 0x02 : 0, true);
+        uint8_t mods = 0;
+        if (keymap_next_utf8(st.text.c_str() + s_textPos, st.text.length() - s_textPos,
+                             &consumed, &usage, &mods)) {
+          player_report_key(usage, mods, true);
+          s_textCurConsumed = consumed;
           s_phase = P_CHAR_DOWN;
           schedule_wait(now, 6);
           return;
         }
-        s_textPos++;
+        s_textPos += consumed;
       }
       // testo terminato
       s_phase = P_IDLE;
@@ -304,7 +309,7 @@ void macro_tick() {
 
     case P_CHAR_DOWN:
       player_report_key(0, 0, false);
-      s_textPos++;
+      s_textPos += s_textCurConsumed;
       s_phase = P_TEXT;
       schedule_wait(now, 12); // rilascio + gap tra caratteri
       return;
