@@ -1,158 +1,168 @@
 # PocketHID Protocol
 
-Lingua franca tra l'app (web/nativa) e l'ESP32. Identica su tutti i trasporti (WebSocket, BLE GATT).
+Shared protocol between the app (PWA / native) and the ESP32-S3 firmware. Identical across all transports (WebSocket and BLE GATT).
 
-## Principi
+## Principles
 
-- **JSON** come formato su entrambi i trasporti. Su GATT: JSON compatto (chiavi corte), chunking per messaggi > MTU.
-- **Un solo schema**: l'ESP32 non distingue da quale trasporto arriva il messaggio.
-- I keycode sono **HID Usage ID** (pagina 0x07 tastiera, pagina 0x0C consumer). L'app manda *posizioni di tasto*, mai caratteri.
+- **JSON** payload on all transports. Over BLE GATT, compact JSON with short keys is chunked when exceeding `MTU - 3`.
+- **Transport-agnostic**: the ESP32 command router handles WebSocket and BLE messages identically.
+- Keycodes use **USB HID Usage IDs** (page `0x07` Keyboard, page `0x0C` Consumer). The app sends *key positions*, not characters (except `text` messages).
 
 ## 1. Handshake
 
-```
-App  ->  { "t": "hello", "v": 1, "caps": ["text","macro"], "token": "..." }
-ESP  ->  { "t": "welcome", "v": 1, "fw": "0.1.0", "layout": "it",
-           "usb": "mounted", "ble": 1, "macros": ["id1","id2"] }
-```
-
-- `v`: versione protocollo. Se non combacia, l'app avvisa l'utente e si ferma.
-- `token`: richiesto su WebSocket (WiFi casa / hotspot). Su BLE il pairing fa da auth.
-- `layout`: `"it"` o `"us"` — deve combaciare col layout selezionato nell'app.
-
-## 2. Messaggi App → ESP
-
-| t (type) | Campi | Note |
-|---|---|---|
-| `key` | `code`, `mods`, `act` | `act`: `d`=down, `u`=up, `t`=tap (`code=0` con `mods!=0` = solo modificatore, es. tasto Win/Super) |
-| `text` | `s`, [`i`, `n`] | stringa da digitare; `i`/`n` = chunk indice/totale (BLE) |
-| `consumer` | `code` | media keys (pagina 0x0C) |
-| `mouse` | `dx`, `dy` | movimento relativo, int16 |
-| `mbtn` | `b`, `act` | `b`: 0=left 1=right 2=middle; `act`: `d`/`u`/`c` |
-| `scroll` | `dx`, `dy` | due dita sul trackpad |
-| `macro_run` | `id` | esegue una macro salvata nell'ESP (NVS); risposta `macro_done` a fine esecuzione |
-| `macro_save` | `id`, `steps` | salva/aggiorna macro; a successo risponde con uno `state` (lista aggiornata) |
-| `macro_del` | `id` | elimina macro; a successo risponde con uno `state` |
-| `macro_get` | `id` | richiede il contenuto; risposta `macro_data` |
-
-#### Formato step macro
-
-`steps` è un array di oggetti, ciascuno con UNA delle chiavi seguenti:
-
-| Step | Campi | Significato |
-|---|---|---|
-| Tasto | `k`, [`m`] | tap del keycode HID 0x07 con modificatori (stesso bitmask di `key`) |
-| Testo | `s` | stringa digitata (limiti del firmware: ASCII, layout corrente) |
-| Media | `c` | codice consumer 0x0C |
-| Attesa | `w` | pausa in ms (max 60000) |
-
-Esempio:
 ```json
-{ "t": "macro_save", "id": "netflix",
-  "steps": [ {"s":"netflix.com"}, {"k":0x28}, {"w":2000}, {"c":0xcd} ] }
+App -> { "t": "hello", "v": 1, "caps": ["text", "macro"], "token": "..." }
+ESP -> { "t": "welcome", "v": 1, "fw": "0.3.0", "layout": "it",
+         "usb": "mounted", "ble": 1, "macros": ["id1", "id2"] }
 ```
 
-Limiti firmware: id `[a-zA-Z0-9_-]` 1–20 char (escluso `"__idx"`), max 12 macro, 1–64 step, blob ≤ 2 KB.
-Al termine dell'esecuzione l'ESP invia `{"t":"macro_done","id":"..."}`.
-| `state` | — | richiede diagnostica |
+- `v`: protocol version. If mismatched, the app stops and warns the user.
+- `token`: required on WebSocket when `MK_TOKEN` is configured. Over BLE, encrypted pairing acts as authentication.
+- `layout`: `"it"` or `"us"` — active firmware keymap layout.
 
-### Bitmask modificatori (`mods`)
+## 2. Messages: App -> ESP
 
-| Bit | Valore | Tasto |
+| `t` (type) | Fields | Notes |
 |---|---|---|
-| 0 | 1 | Ctrl |
-| 1 | 2 | Shift |
-| 2 | 4 | Alt |
-| 3 | 8 | Gui (Win/Cmd) |
+| `key` | `code`, `mods`, `act` | `act`: `d`=down, `u`=up, `t`=tap (`code=0` with `mods!=0` = modifier-only tap, e.g. Win/Super key) |
+| `text` | `s`, `[i, n]` | UTF-8 string to type using the active firmware layout (`it`/`us`); `i`/`n` = optional chunk index/total |
+| `layout` | `layout` | switch firmware keymap layout (`"it"` or `"us"`); responds with `state` |
+| `consumer` | `code` | media/consumer key (HID page `0x0C`) |
+| `mouse` | `dx`, `dy` | relative movement (`int16`, clamped to `int8` per HID report) |
+| `mbtn` | `b`, `act` | `b`: `0`=left, `1`=right, `2`=middle; `act`: `d`/`u`/`c` |
+| `scroll` | `dx`, `dy` | two-finger scroll delta |
+| `state` | — | requests current diagnostics/status (`welcome`-style payload) |
+| `macro_run` | `id` | runs a macro stored in ESP32 NVS; broadcasts `macro_done` on completion |
+| `macro_save` | `id`, `steps` | saves/updates a macro in NVS; responds with `state` (updated list) |
+| `macro_del` | `id` | deletes a macro from NVS; responds with `state` |
+| `macro_get` | `id` | fetches a macro's steps; responds with `macro_data` |
 
-Esempio Ctrl+Shift+Esc → `{"t":"key","code":41,"mods":3,"act":"t"}`
+### Macro Step Format
 
-## 3. Messaggi ESP → App
+`steps` is an array of objects, each containing **one** of the following keys:
 
-| t (type) | Campi | Note |
+| Step | Fields | Meaning |
 |---|---|---|
-| `usb_state` | `st` | `mounted` / `unmounted` — l'ESP sa se il target lo vede |
-| `ble_state` | `n` | numero central connesse |
-| `macro_done` | `id` | conferma esecuzione macro |
-| `macro_data` | `id`, `steps` | contenuto di una macro (risposta a `macro_get`) |
-| `error` | `msg` | messaggio leggibile per la UI |
+| Key | `k`, `[m]` | tap HID page `0x07` keycode with optional modifier bitmask `m` |
+| Text | `s` | UTF-8 string typed using the active firmware layout |
+| Media | `c` | HID page `0x0C` consumer code |
+| Wait | `w` | delay in milliseconds (max `60000`) |
 
-## 4. Keycode di riferimento (HID Usage ID)
+Example:
 
-### Tastiera (page 0x07)
+```json
+{
+  "t": "macro_save",
+  "id": "netflix",
+  "steps": [
+    { "s": "netflix.com" },
+    { "k": 40 },
+    { "w": 2000 },
+    { "c": 205 }
+  ]
+}
+```
 
-| Tasto | Hex | Tasto | Hex |
+Firmware limits: `id` matching `[a-zA-Z0-9_-]` (1–20 chars, excluding `"__idx"`), max 12 macros, 1–64 steps, JSON blob <= 2 KB.
+When playback finishes, the ESP broadcasts `{"t":"macro_done","id":"..."}`.
+
+### Modifier Bitmask (`mods`)
+
+| Bit | Value | Key |
+|---|---|---|
+| 0 | 1 | Left Ctrl |
+| 1 | 2 | Left Shift |
+| 2 | 4 | Left Alt |
+| 3 | 8 | Left GUI (Win/Cmd) |
+| 6 | 64 | Right Alt (AltGr) |
+
+Example `Ctrl+Shift+Esc`: `{"t":"key","code":41,"mods":3,"act":"t"}`.
+
+## 3. Messages: ESP -> App
+
+| `t` (type) | Fields | Notes |
+|---|---|---|
+| `usb_state` | `st` | `mounted` / `unmounted` — indicates whether the target USB host enumerated the device |
+| `ble_state` | `n` | number of connected BLE centrals |
+| `macro_done` | `id` | macro execution completed |
+| `macro_data` | `id`, `steps` | macro contents (response to `macro_get`) |
+| `error` | `msg` | human-readable error message for the UI |
+
+## 4. Reference HID Usage IDs
+
+### Keyboard (Page `0x07`)
+
+| Key | Hex | Key | Hex |
 |---|---|---|---|
-| A–Z | 0x04–0x1D | 1–9,0 | 0x1E–0x27 |
-| Enter | 0x28 | Esc | 0x29 |
-| Backspace | 0x2A | Tab | 0x2B |
-| Space | 0x2C | - _ | 0x2D |
-| = + | 0x2E | [ { | 0x2F |
-| ] } | 0x30 | \ \| | 0x31 |
-| ; : | 0x33 | ' " | 0x34 |
-| ` ~ | 0x35 | , < | 0x36 |
-| . > | 0x37 | / ? | 0x38 |
-| Caps Lock | 0x39 | F1–F12 | 0x3A–0x45 |
-| PrintScreen | 0x46 | ScrollLock | 0x47 |
-| Pause | 0x48 | Insert | 0x49 |
-| Home | 0x4A | PageUp | 0x4B |
-| Delete | 0x4C | End | 0x4D |
-| PageDown | 0x4E | Right | 0x4F |
-| Left | 0x50 | Down | 0x51 |
-| Up | 0x52 | Keypad 0–9 | 0x54–0x63 |
+| A–Z | `0x04`–`0x1D` | 1–9, 0 | `0x1E`–`0x27` |
+| Enter | `0x28` | Esc | `0x29` |
+| Backspace | `0x2A` | Tab | `0x2B` |
+| Space | `0x2C` | `- _` | `0x2D` |
+| `= +` | `0x2E` | `[ {` | `0x2F` |
+| `] }` | `0x30` | `\ \|` | `0x31` |
+| `; :` | `0x33` | `' "` | `0x34` |
+| `` ` ~ `` | `0x35` | `, <` | `0x36` |
+| `. >` | `0x37` | `/ ?` | `0x38` |
+| Caps Lock | `0x39` | F1–F12 | `0x3A`–`0x45` |
+| PrintScreen | `0x46` | ScrollLock | `0x47` |
+| Pause | `0x48` | Insert | `0x49` |
+| Home | `0x4A` | PageUp | `0x4B` |
+| Delete | `0x4C` | End | `0x4D` |
+| PageDown | `0x4E` | Right | `0x4F` |
+| Left | `0x50` | Down | `0x51` |
+| Up | `0x52` | Keypad 0–9 | `0x54`–`0x63` |
 
-### Consumer / media (page 0x0C)
+### Consumer / Media (Page `0x0C`)
 
-| Tasto | Hex |
+| Key | Hex |
 |---|---|
-| Power | 0x30 |
-| Volume Up / Down | 0xE9 / 0xEA |
-| Mute | 0xE2 |
-| Play/Pause | 0xCD |
-| Stop | 0xB7 |
-| Next / Prev track | 0xB5 / 0xB6 |
-| Brightness Up / Down | 0x6F / 0x70 |
+| Power | `0x30` |
+| Volume Up / Down | `0xE9` / `0xEA` |
+| Mute | `0xE2` |
+| Play / Pause | `0xCD` |
+| Stop | `0xB7` |
+| Next / Previous Track | `0xB5` / `0xB6` |
+| Brightness Up / Down | `0x6F` / `0x70` |
 
-> **Nota Fn**: non è inviabile — è gestito dalla matrice della tastiera fisica, mai visibile all'OS. Le funzioni "Fn+" si ottengono mandando il loro risultato (es. media keys, luminosità).
+> **Note on Fn keys**: `Fn` cannot be sent over USB HID because it is handled internally by physical keyboard matrices and never reaches the OS. "Fn+" actions are sent directly as their resulting keycodes (e.g., media or brightness keys).
 
-## 5. Trasporto BLE GATT
+## 5. BLE GATT Transport
 
-- **Servizio** (`MK_BLE_SVC`): `7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f`
-- **RX char** (app → ESP): `7a0c1001-…` — write e write-without-response (per `mouse` fire-and-forget), **richiede cifratura** (il pairing avviene prima di ogni write)
-- **TX char** (ESP → app): `7a0c1002-…` — notify, cifrata
-- **Device name**: `PocketHID`; lo scan dell'app filtra per presence del service UUID
-- **MTU**: richiesto 247; messaggi JSON > `MTU - 3`:
-  - **RX (app → ESP)**: l'app invia il JSON spezzato su più write e l'ESP accumula finché il parse non riesce (buffer 2560 B per contenere `macro_save` al limite, overflow → errore e reset).
-  - **TX (ESP → app)**: se una risposta supera `MTU - 3` (es. `macro_data` grande), l'ESP la spezza in più notify sequenziali e l'app (`BleBase`) riassembla i chunk (buffer 4 KB, timeout 1,5 s).
-- **Connection interval**: richiesto 7.5–15ms per mouse fluido
-- **Sicurezza**: pairing/bonding obbligatorio (`WRITE_ENC` su RX + verifica `isEncrypted()` in `onWrite`); l'handshake `hello` resta identico ma senza token (il pairing fa da auth)
-- **Doppio hello**: su ogni riconnessione serve un nuovo `hello`
+- **Service UUID** (`MK_BLE_SVC`): `7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f`
+- **RX Characteristic** (app -> ESP): `7a0c1001-8b6d-4d3f-9a2e-5f1c2b3d4e5f` — `WRITE` and `WRITE_NR` (used for fire-and-forget `mouse`/`scroll`), **encryption required** (`WRITE_ENC`).
+- **TX Characteristic** (ESP -> app): `7a0c1002-8b6d-4d3f-9a2e-5f1c2b3d4e5f` — `NOTIFY`.
+- **Device name**: `PocketHID`; the app filters scans by service UUID.
+- **MTU & Chunking**: requests MTU 247. For JSON payloads larger than `MTU - 3`:
+  - **RX (app -> ESP)**: the app splits the JSON across sequential writes and the ESP accumulates chunks until JSON parsing succeeds (2560 B buffer; overflow returns an error and resets).
+  - **TX (ESP -> app)**: large responses (such as `macro_data`) are split across sequential notifications and reassembled in `BleBase` (4 KB buffer, 1.5 s timeout).
+- **Connection interval**: requests 7.5–15 ms for smooth trackpad movement.
+- **Security**: mandatory pairing/bonding (`WRITE_ENC` + runtime `isEncrypted()` check). Each (re)connection still requires a `hello` handshake (no token needed over BLE).
 
-## 6. Trasporti di rete (WebSocket / portal)
+## 6. Network Transports (WebSocket, Portal & OTA)
 
 ### WebSocket
 
 - Endpoint: `ws://<ip>:80/ws`
-- **Auth**: per-client; l'ESP attende `hello` (`v: 1`) + `token` valido entro 5 s, altrimenti chiude la connessione
-- **Heartbeat**: `{t:"state"}` ogni ~15s dall'app; riconnessione con backoff esponenziale
-- **Scoperta**: mDNS `pockethid.local` su rete di casa
+- **Auth**: per-client; the ESP expects `hello` (`v: 1`) + valid `token` within 5 s, otherwise it closes the socket.
+- **Heartbeat**: `{ "t": "state" }` every ~15 s from the app; reconnect with exponential backoff.
+- **Discovery**: mDNS `pockethid.local` on the home network.
 
-### Hotspot AP + captive portal + config WiFi
+### On-Demand Hotspot AP & Captive Portal
 
-- L'AP `PocketHID-XXXX` (ultimi byte MAC, WPA2 con `MK_AP_PASS`) è attivo on-demand: all'avvio, con credenziali mancanti/errate o dopo 15 s di caduta dello STA; si spegne quando lo STA ottiene un IP
-- Connessione all'AP → captive portal → pagina di configurazione (`/portal` se la PWA è montata su LittleFS, altrimenti `/`)
-- `POST /save` (`ssid`, `pass` form-urlencoded; richiede `token` via campo form, query `?token=` o header `X-MK-Token` se `MK_TOKEN` è configurato) → salva in NVS → riavvio automatico
-- `GET /wifi-info` → `{sta_ssid, sta_connected, ip, ap_ssid}`
-- Probe captive reindirizzate al portal (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, `/ncsi.txt`, `/fwlink`)
-- Le credenziali NVS hanno priorità su quelle compilate in `config_local.h` (che restano il fallback iniziale)
+- AP `PocketHID-XXXX` (last two MAC bytes, WPA2 with `MK_AP_PASS`) runs on demand: enabled at boot, when credentials are missing/invalid, or after 15 s of STA disconnection; turns off once STA obtains an IP.
+- Captive portal config page: `/portal` when LittleFS contains the PWA (`index.html`), or `/` otherwise.
+- `POST /save` (`ssid`, `pass` form-urlencoded; requires `token` via form field, `?token=` query, or `X-MK-Token` header if `MK_TOKEN` is enabled) -> saves to NVS -> reboots.
+- `GET /wifi-info` -> `{ sta_ssid, sta_connected, ip, ap_ssid }`.
+- Captive portal probes (`/generate_204`, `/hotspot-detect.html`, `/connecttest.txt`, `/ncsi.txt`, `/fwlink`) redirect to the portal.
+- NVS credentials take priority over compiled defaults in `config_local.h`.
 
-### OTA
+### WiFi OTA
 
-- `GET /update` → form upload; `POST /update` (multipart, campo `bin`; protetto da `MK_TOKEN` via campo form `token`, query `?token=` o header `X-MK-Token` se configurato) → flash e riavvio differito
-- Partizioni custom `partitions_4mb.csv` (due slot OTA da 1,75 MB + 384 KB LittleFS per la PWA)
+- `GET /update` -> upload form; `POST /update` (multipart field `bin`; protected by `MK_TOKEN` via form field `token`, `?token=`, or `X-MK-Token` if configured) -> flashes and performs a deferred reboot on `loopTask`.
+- Custom partition table `partitions_4mb.csv`: two 1.75 MB OTA slots + 384 KB LittleFS for the PWA.
 
-## 7. Convenzioni trasversali
+## 7. Cross-Cutting Conventions
 
-- **Coalescing mouse**: l'app genera `mouse` a ~60Hz; su BLE può batchare tra un interval e l'altro. Il firmware somma i delta (int8 per report: oltre ±127 l'app spezza tra i frame).
-- **Macro**: salvate nell'ESP (NVS), elenco nel `welcome`; editor nell'app, sync via `macro_save`/`macro_del`.
-- **Modi di invio testo**: `text` gestisce maiuscole, accenti e caratteri speciali secondo `layout` (IT/US).
+- **Mouse coalescing**: the app emits `mouse` events at ~60 Hz; the firmware accumulates deltas per loop tick and clamps each HID report to `int8` (`-127..127`).
+- **Macros**: stored locally in the app (`localStorage`) with JSON import/export, and optionally synced to ESP32 NVS (`macro_save`/`macro_del`).
+- **Text input**: `text` handles uppercase, accents, and symbols according to the active `layout` (`it` or `us`).

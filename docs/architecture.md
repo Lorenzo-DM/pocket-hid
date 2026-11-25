@@ -1,80 +1,67 @@
 # PocketHID — Architecture
 
-Tastiera/mouse virtuale: app su telefono → ESP32-S3 → dispositivo target.
+Virtual keyboard, mouse, media remote, and macro pad: phone app -> ESP32-S3 -> USB-C cable -> target device.
 
-## Flusso
+## Data Flow
 
+```text
+Phone (PWA / Capacitor Android app)
+   |
+   +-- BLE (custom GATT, encrypted)    <- works without WiFi
+   +-- Home WiFi (WebSocket + mDNS)    <- same LAN (pockethid.local)
+   +-- ESP32 Hotspot (captive portal)  <- works offline, self-hosted PWA
+         |
+         v
+      ESP32-S3 ────── USB-C cable ──────> Smart TV / PC / Tablet
+      (Composite USB HID:                 (sees a standard hardware
+       keyboard + mouse + consumer)        USB keyboard and mouse)
 ```
-Telefono (PWA / app Capacitor)
-   │
-   ├── 🔵 BLE (servizio GATT custom)     ← uso senza rete, unico modo su iOS
-   ├── 🏠 WebSocket su WiFi di casa      ← stesso network, scoperta mDNS
-   └── 📡 WebSocket su hotspot ESP       ← captive portal, telefono offline
-         │
-         ▼
-      ESP32-S3 ────── cavo USB ──────▶ TV / PC / tablet
-      (composite HID:                  (vede una tastiera/mouse USB
-       keyboard + mouse                reale)
-       + consumer keys)
-```
 
-- **Output**: solo USB HID (TinyUSB). Nessun BLE HID verso il target — niente pairing col target.
-- **Input**: solo BLE GATT custom + WebSocket. Nessun altro mezzo.
-- Tutto il mapping testo→keycode, macro e modifier vive **nell'ESP32**: i canali sono pipe.
+- **Output**: USB HID only (TinyUSB). No BLE HID toward the target — zero pairing required on the TV or PC.
+- **Input**: custom BLE GATT and WebSocket only.
+- **ESP32-side logic**: text-to-keycode mapping (US/IT UTF-8 + AltGr), 6KRO state, and macro execution live in the ESP32 firmware. Transports are thin pipes carrying the same JSON protocol.
 
-## Componenti
+## Components
 
-### 1. `/app` — Web app (React + Vite + TS) con Capacitor
+### 1. `/app` — Web App (React + Vite + TypeScript) & Capacitor Android Shell
 
-- **PWA** nel browser: WebSocket (WiFi) + Web Bluetooth (Chrome/Edge desktop e Android)
-- **App nativa iOS/Android**: stesso identico codice in una WebView Capacitor, BLE via `@capacitor-community/bluetooth-le`
-- `Capacitor.isNativePlatform()` decide il layer di trasporto a runtime
-- Sezioni: Trackpad/Mouse · Tastiera (tutti i speciali tranne Fn, non inviabile) · Media keys · Modalità testo · Macro · Settings
-- Connection picker unico con auto-discovery (BLE advertising + mDNS + captive portal), riconnessione automatica all'ultima via usata
-- La PWA viene servita anche direttamente dall'ESP32 (file statici + mDNS), con cache offline via Service Worker
+- **PWA** in the browser: WebSocket (WiFi/hotspot) and Web Bluetooth (Chrome/Edge desktop & Android over HTTPS).
+- **Native Android app**: identical codebase inside a Capacitor WebView, using `@capacitor-community/bluetooth-le` for BLE.
+- `Capacitor.isNativePlatform()` selects the BLE transport layer at runtime.
+- Views: Trackpad, Virtual Keyboard (US/IT layouts, Symbols tab, sticky modifiers, special keys), Media keys, Macros (local storage + JSON import/export + optional ESP32 NVS sync), Settings, and Demo mode.
+- Served directly from the ESP32-S3 via LittleFS (pre-compressed with gzip) with offline Service Worker caching.
 
 ### 2. `/firmware` — ESP32-S3 (PlatformIO / Arduino)
 
-- **TinyUSB**: composite HID device (keyboard + mouse + consumer control)
-- **NimBLE**: servizio GATT custom (RX/TX chars), pairing obbligatorio
-- **ESPAsyncWebServer**: WebSocket + file statici della PWA + captive portal (DNS redirect)
-- **Modalità STA + AP on-demand**: connesso alla rete di casa l'hotspot è spento; l'AP si attiva all'avvio, con credenziali mancanti/errate o se lo STA cade (dopo ~15 s di tentativi)
-- Logica: parser comandi, mapping keycode→report HID, layout IT/US, macro in NVS, diagnostica (stato USB/BLE/WiFi)
+- **TinyUSB**: composite HID device (6KRO keyboard + mouse + consumer control).
+- **NimBLE**: encrypted custom GATT service (RX/TX characteristics, mandatory pairing/bonding, RX/TX chunking).
+- **ESPAsyncWebServer**: WebSocket server, LittleFS static hosting for the PWA, on-demand AP captive portal, and WiFi OTA (`/update`).
+- **Single-owner `loopTask`**: FreeRTOS command queue decouples network (`async_tcp`) and BLE (`nimble_host`) tasks from USB HID, NVS, and `DNSServer`.
+- **On-demand AP + STA**: when connected to home WiFi, the hotspot turns off automatically; the AP activates at boot, when credentials are missing/invalid, or after ~15 s of STA disconnect.
 
-### 3. `/docs` — Riferimenti
+### 3. `/docs` — References
 
-- `protocol.md`: protocollo di comunicazione (fonte di verità)
-- `architecture.md`: questo documento
+- `protocol.md`: communication protocol specification (source of truth).
+- `architecture.md`: this document.
+- `troubleshooting.md`: ESP32-S3 TinyUSB, flash size, download mode, and single-USB board notes.
 
-## Trasporti a confronto
+## Transport Comparison
 
-| | 🔵 BLE | 🏠 WiFi casa | 📡 Hotspot ESP |
+| | BLE | Home WiFi | ESP32 Hotspot |
 |---|---|---|---|
-| Setup | pairing una volta | zero config | connettersi all'hotspot |
-| Internet sul telefono | ✅ | ✅ | ❌ |
-| Raggio | ~10m | rete casa | ~20-30m |
-| Scoperta | scan per UUID servizio | mDNS | captive portal / IP fisso |
+| Setup | Pair once | Configure WiFi once | Connect to `PocketHID-XXXX` |
+| Phone internet access | Yes | Yes | No |
+| Range | ~10 m | Home LAN | ~20–30 m |
+| Discovery | Service UUID scan | mDNS (`pockethid.local`) | Captive portal / `192.168.4.1` |
 
-## Sicurezza
+## Security
 
-- BLE: pairing/bonding (crittografia a livello GAP)
-- WiFi/AP: token generato dall'ESP, inserito una volta nell'app; WPA2 con password sull'hotspot
-- Un mouse/tastiera remota controlla il target: nessun endpoint anonimo
+- **BLE**: mandatory pairing/bonding (`WRITE_ENC` + runtime `isEncrypted()` verification).
+- **WiFi / Hotspot**: optional `MK_TOKEN` (constant-time verification) protecting WebSocket, `/save`, and `/update`; WPA2 password on the AP (`pockethid1` by default, configurable in `config.h` / `config_local.h`).
 
-## Limitazioni note
+## Known Limitations
 
-- Target in standby profondo: molti TV non reagiscono a input USB spenti → accendere col telecomando originale (eventuale IR blaster = fase 2, fuori scope)
-- Modalità hotspot: il telefono perde internet (documentarlo nella UI)
-- WiFi casa richiede telefono ed ESP sulla stessa rete
-- Porte USB di alcune TV forniscono poca corrente: il firmware gestisce brownout, opzione alimentazione esterna
-
-## Roadmap
-
-1. Firmware: WS server + TinyUSB HID (keyboard+mouse+consumer)
-2. PWA base: connessione + tastiera + modalità testo
-3. Trackpad touch + scroll
-4. Speciali estesi + media keys
-5. Macro (editor UI + runtime su firmware, persistenza NVS)
-6. BLE GATT (PWA su Chrome/Android) + modal spesso hotspot/captive portal
-7. Guscio Capacitor iOS/Android + plugin BLE
-8. App servita dall'ESP32 + cache offline
+- **Target in deep standby**: many TVs do not wake from USB HID input — power on with the original remote.
+- **Hotspot mode**: the phone has no internet access while connected to the ESP32 AP.
+- **Home WiFi**: phone and ESP32 must be on the same network.
+- **Low-power TV USB ports**: some TV USB ports supply limited current; use a powered hub or external power if brownouts occur.

@@ -34,13 +34,13 @@
 
   <div class="card">
     <esp-web-install-button manifest="./manifest.json" show-log="false">
-      <button slot="activate">⚡ Install PocketHID</button>
+      <button slot="activate">Install PocketHID</button>
       <span slot="unsupported">
-        <p class="warn">⚠ Web Serial is not supported by this browser.</p>
+        <p class="warn">Web Serial is not supported by this browser.</p>
         <p>Use desktop Chrome or Edge (Windows, Linux, macOS). <strong>Safari and iOS are not supported</strong> — for future updates you can use WiFi OTA (<code>http://pockethid.local/update</code>).</p>
       </span>
       <span slot="not-allowed">
-        <p class="warn">⚠ This page must be served over HTTPS and serial access must be allowed.</p>
+        <p class="warn">This page must be served over HTTPS and serial access must be allowed.</p>
       </span>
     </esp-web-install-button>
   </div>
@@ -49,7 +49,7 @@
     <h2>1. Flash the ESP32-S3</h2>
     <ol>
       <li>Connect your ESP32-S3 via USB-C. On <strong>dual-USB</strong> boards use the <strong>UART</strong> port; on <strong>single-USB</strong> boards (direct OTG) use the only USB-C port.</li>
-      <li>Click <strong>⚡ Install PocketHID</strong> and select the serial port (e.g. <code>USB Serial/JTAG</code> or <code>CP210x</code>/<code>CH340</code>).</li>
+      <li>Click <strong>Install PocketHID</strong> and select the serial port (e.g. <code>USB Serial/JTAG</code> or <code>CP210x</code>/<code>CH340</code>).</li>
       <li>If flashing doesn't start automatically on a single-USB board: unplug USB, <strong>hold BOOT</strong>, plug USB back in, release BOOT after ~2s, then retry.</li>
       <li><strong class="warn">After flashing (single-USB boards):</strong> unplug and replug the USB cable without holding BOOT to start the firmware.</li>
     </ol>
