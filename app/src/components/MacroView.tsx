@@ -1,12 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DeviceLink } from '../protocol/connection';
 import type { MacroStep } from '../protocol/messages';
 import { K, CONSUMER, MOD } from '../protocol/hid';
+import { transliterateAscii, type Prefs } from '../hooks/usePrefs';
+import {
+  exportMacrosJson,
+  parseMacrosJson,
+  useLocalMacros,
+  validateForEsp,
+  type LocalMacro,
+} from '../hooks/useLocalMacros';
 import { IconClose, IconEdit, IconMacro, IconPlus, IconTrash } from './Icons';
 
 interface Props {
   conn: DeviceLink;
-  macros: string[];
+  macros: string[]; // macro salvate sull'ESP (NVS)
+  prefs: Prefs;
   vibrate: (p?: number | number[]) => void;
   onToast: (text: string, kind?: 'info' | 'error') => void;
 }
@@ -14,7 +23,8 @@ interface Props {
 type StepType = 'key' | 'text' | 'media' | 'wait';
 
 interface Editing {
-  id: string;
+  id?: string;
+  name: string;
   steps: MacroStep[];
 }
 
@@ -39,6 +49,17 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
   { label: 'Fine', code: K.END },
   { label: 'PgSu', code: K.PAGEUP },
   { label: 'PgGiù', code: K.PAGEDOWN },
+  { label: '- / _', code: K.MINUS },
+  { label: '= / +', code: K.EQUAL },
+  { label: '[ / {', code: K.LBRACKET },
+  { label: '] / }', code: K.RBRACKET },
+  { label: '\\ / |', code: K.BACKSLASH },
+  { label: '; / :', code: K.SEMICOLON },
+  { label: "' / \"", code: K.QUOTE },
+  { label: '` / ~', code: K.GRAVE },
+  { label: ', / <', code: K.COMMA },
+  { label: '. / >', code: K.DOT },
+  { label: '/ / ?', code: K.SLASH },
   { label: '(Solo modificatori, es. Win)', code: 0 },
 ];
 
@@ -56,6 +77,7 @@ const MEDIA_OPTIONS: { label: string; code: number }[] = [
 ];
 
 const QUICK_STEPS: { label: string; step: MacroStep }[] = [
+  { label: 'Ctrl+Alt+T', step: { k: K.T, m: MOD.CTRL | MOD.ALT } },
   { label: '⊞ Win', step: { k: 0, m: MOD.GUI } },
   { label: '↵ Invio', step: { k: K.ENTER } },
   { label: 'Esc', step: { k: K.ESC } },
@@ -94,78 +116,236 @@ function stepBadge(s: MacroStep): string {
   return 'ATTESA';
 }
 
-export function MacroView({ conn, macros, vibrate, onToast }: Props) {
+export function MacroView({ conn, macros: espMacros, prefs, vibrate, onToast }: Props) {
+  const { macros: localMacros, upsertMacro, deleteMacro, importMacros } = useLocalMacros();
+
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [runningLocalId, setRunningLocalId] = useState<string | null>(null);
+  const [busyEspId, setBusyEspId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const runTokenRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pullingEspRef = useRef<string | null>(null);
+
+  const stopLocalRun = () => {
+    runTokenRef.current += 1;
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setRunningLocalId(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      runTokenRef.current += 1;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const off = conn.onMessage?.((msg) => {
       if (msg.t === 'macro_done') {
-        setBusy((b) => (b === msg.id ? null : b));
-        onToast(`Macro "${msg.id}" completata`);
+        setBusyEspId((b) => (b === msg.id ? null : b));
+        onToast(`Macro ESP "${msg.id}" completata`);
       } else if (msg.t === 'macro_data') {
-        setEditing({ id: msg.id, steps: msg.steps });
+        if (pullingEspRef.current === msg.id) {
+          pullingEspRef.current = null;
+          importMacros([{ name: msg.id, steps: msg.steps }]);
+          onToast(`"${msg.id}" copiata sul telefono`);
+        }
       }
     });
     return () => off?.();
-  }, [conn, onToast]);
+  }, [conn, importMacros, onToast]);
 
-  const run = (id: string) => {
-    if (busy !== null) return;
-    setBusy(id);
+  const sleepCancellable = (ms: number, token: number): Promise<boolean> =>
+    new Promise((resolve) => {
+      if (runTokenRef.current !== token) {
+        resolve(false);
+        return;
+      }
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        resolve(runTokenRef.current === token);
+      }, ms);
+    });
+
+  const runLocal = async (macro: LocalMacro) => {
+    if (runningLocalId === macro.id) {
+      stopLocalRun();
+      vibrate(8);
+      onToast(`Macro "${macro.name}" fermata`);
+      return;
+    }
+    if (runningLocalId !== null || busyEspId !== null) return;
+
+    const token = ++runTokenRef.current;
+    setRunningLocalId(macro.id);
+    vibrate(14);
+
+    for (const step of macro.steps) {
+      if (runTokenRef.current !== token) return;
+
+      if ('k' in step) {
+        conn.send({ t: 'key', code: step.k, mods: step.m ?? 0, act: 't' });
+        if (!(await sleepCancellable(50, token))) return;
+      } else if ('s' in step) {
+        const payload = prefs.transliterate ? transliterateAscii(step.s) : step.s;
+        if (payload) {
+          conn.send({ t: 'text', s: payload });
+          const estMs = Math.max(80, payload.length * 16 + 40);
+          if (!(await sleepCancellable(estMs, token))) return;
+        }
+      } else if ('c' in step) {
+        conn.send({ t: 'consumer', code: step.c });
+        if (!(await sleepCancellable(60, token))) return;
+      } else if ('w' in step) {
+        if (!(await sleepCancellable(step.w, token))) return;
+      }
+    }
+
+    if (runTokenRef.current === token) {
+      setRunningLocalId(null);
+      onToast(`Macro "${macro.name}" completata`);
+    }
+  };
+
+  const runEsp = (id: string) => {
+    if (runningLocalId !== null || busyEspId !== null) return;
+    setBusyEspId(id);
     vibrate(14);
     conn.send({ t: 'macro_run', id });
-    setTimeout(() => setBusy((b) => (b === id ? null : b)), 10000);
+    setTimeout(() => setBusyEspId((b) => (b === id ? null : b)), 10000);
   };
 
-  const edit = (id: string) => {
+  const pushToEsp = (name: string, steps: MacroStep[]): boolean => {
+    const check = validateForEsp(name, steps);
+    if (!check.ok) {
+      onToast(check.reason, 'error');
+      return false;
+    }
+    const existsOnEsp = espMacros.includes(check.espId);
+    if (!existsOnEsp && espMacros.length >= 12) {
+      onToast('Memoria ESP piena (12/12 macro). Eliminane una dall\'ESP.', 'error');
+      return false;
+    }
+    conn.send({ t: 'macro_save', id: check.espId, steps });
+    vibrate(12);
+    onToast(`Salvata anche su ESP come "${check.espId}"`);
+    return true;
+  };
+
+  const removeLocal = (id: string, name: string) => {
+    const key = `local:${id}`;
+    if (confirmDel !== key) {
+      setConfirmDel(key);
+      vibrate([10, 30, 10]);
+      return;
+    }
     setConfirmDel(null);
-    conn.send({ t: 'macro_get', id });
+    deleteMacro(id);
+    onToast(`Macro "${name}" eliminata`);
   };
 
-  const remove = (id: string) => {
-    if (confirmDel !== id) {
-      setConfirmDel(id);
+  const removeEsp = (id: string) => {
+    const key = `esp:${id}`;
+    if (confirmDel !== key) {
+      setConfirmDel(key);
       vibrate([10, 30, 10]);
       return;
     }
     setConfirmDel(null);
     conn.send({ t: 'macro_del', id });
-    onToast(`Macro "${id}" eliminata`);
-    if (editing?.id === id) setEditing(null);
+    onToast(`Macro ESP "${id}" eliminata`);
   };
 
-  const save = () => {
+  const handleSaveLocal = (alsoPushEsp: boolean) => {
     if (!editing) return;
-    conn.send({ t: 'macro_save', id: editing.id, steps: editing.steps });
+    const saved = upsertMacro(editing);
     vibrate(12);
-    onToast(`Macro "${editing.id}" salvata`);
+    if (alsoPushEsp) {
+      if (!pushToEsp(saved.name, saved.steps)) return;
+    } else {
+      onToast(`Macro "${saved.name}" salvata sul telefono`);
+    }
     setEditing(null);
     setEditMode(false);
+  };
+
+  const handleExport = () => {
+    if (localMacros.length === 0) return;
+    const json = exportMacrosJson(localMacros);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mk-remote-macros.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    onToast(`Esportate ${localMacros.length} macro in JSON`);
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseMacrosJson(text);
+      if (parsed.length === 0) {
+        onToast('Nessuna macro valida trovata nel file JSON', 'error');
+        return;
+      }
+      const n = importMacros(parsed);
+      vibrate(12);
+      onToast(`Importate ${n} macro sul telefono`);
+    } catch {
+      onToast('File JSON non valido', 'error');
+    }
   };
 
   if (editing) {
     return (
       <MacroEditor
         editing={editing}
+        espCount={espMacros.length}
+        espIds={espMacros}
         onChange={setEditing}
-        onSave={save}
+        onSaveLocal={() => handleSaveLocal(false)}
+        onSaveEsp={() => handleSaveLocal(true)}
         onCancel={() => setEditing(null)}
       />
     );
   }
 
+  const hasAny = localMacros.length > 0 || espMacros.length > 0;
+
   return (
     <div className="macro-screen">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          e.target.value = '';
+          void handleImportFile(f);
+        }}
+      />
+
       <div className="macro-head">
         <div>
           <h2>Macro</h2>
-          <span className="muted-sm">{macros.length} / 12 salvate sull&apos;ESP</span>
+          <span className="muted-sm">
+            {localMacros.length} sul telefono
+            {espMacros.length > 0 ? ` · ${espMacros.length}/12 su ESP` : ''}
+          </span>
         </div>
         <div className="macro-head-actions">
-          {macros.length > 0 && (
+          {hasAny && (
             <button
               type="button"
               className={`btn-secondary sm ${editMode ? 'active' : ''}`}
@@ -180,10 +360,9 @@ export function MacroView({ conn, macros, vibrate, onToast }: Props) {
           <button
             type="button"
             className="btn-primary sm"
-            disabled={macros.length >= 12}
             onClick={() => {
               setEditMode(false);
-              setEditing({ id: '', steps: [] });
+              setEditing({ name: '', steps: [] });
             }}
           >
             <IconPlus size={16} />
@@ -192,47 +371,90 @@ export function MacroView({ conn, macros, vibrate, onToast }: Props) {
         </div>
       </div>
 
-      {macros.length === 0 ? (
+      {/* Barra importa / esporta JSON */}
+      <div className="macro-io-bar">
+        <button
+          type="button"
+          className="btn-secondary sm"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Importa JSON
+        </button>
+        {localMacros.length > 0 && (
+          <button
+            type="button"
+            className="btn-secondary sm"
+            onClick={handleExport}
+          >
+            Esporta JSON
+          </button>
+        )}
+      </div>
+
+      {localMacros.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">
             <IconMacro size={28} />
           </div>
-          <h3>Nessuna macro salvata</h3>
+          <h3>Nessuna macro sul telefono</h3>
           <p className="muted">
-            Crea scorciatoie multi-step (tasti, testo, comandi media e pause) salvate direttamente nella memoria dell&apos;ESP32.
+            Le macro vengono salvate nella memoria del telefono (senza occupare la flash dell&apos;ESP). Puoi crearle qui o importare un file JSON.
           </p>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setEditing({ id: '', steps: [] })}
-          >
-            <IconPlus size={17} />
-            <span>Crea la prima macro</span>
-          </button>
+          <div className="macro-empty-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setEditing({ name: '', steps: [] })}
+            >
+              <IconPlus size={17} />
+              <span>Crea macro</span>
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Importa JSON
+            </button>
+          </div>
         </div>
       ) : (
         <div className="macro-grid">
-          {macros.map((id) => {
-            const isRunning = busy === id;
-            const isConfirming = confirmDel === id;
+          {localMacros.map((m) => {
+            const isRunning = runningLocalId === m.id;
+            const isConfirming = confirmDel === `local:${m.id}`;
 
             if (editMode) {
               return (
-                <div key={id} className="macro-card editing">
-                  <span className="macro-card-title">{id}</span>
+                <div key={m.id} className="macro-card editing">
+                  <div>
+                    <span className="macro-card-title">{m.name}</span>
+                    <div className="macro-card-sub">{m.steps.length} step</div>
+                  </div>
                   <div className="macro-card-tools">
                     <button
                       type="button"
                       className="btn-secondary sm"
-                      onClick={() => edit(id)}
+                      onClick={() => {
+                        setConfirmDel(null);
+                        setEditing({ id: m.id, name: m.name, steps: [...m.steps] });
+                      }}
                     >
                       <IconEdit size={15} />
                       <span>Modifica</span>
                     </button>
                     <button
                       type="button"
+                      className="btn-secondary sm"
+                      title="Salva una copia nella memoria dell'ESP32"
+                      onClick={() => pushToEsp(m.name, m.steps)}
+                    >
+                      → ESP
+                    </button>
+                    <button
+                      type="button"
                       className={`btn-danger sm ${isConfirming ? 'armed' : ''}`}
-                      onClick={() => remove(id)}
+                      onClick={() => removeLocal(m.id, m.name)}
                     >
                       <IconTrash size={15} />
                       <span>{isConfirming ? 'Sicuro?' : ''}</span>
@@ -244,23 +466,85 @@ export function MacroView({ conn, macros, vibrate, onToast }: Props) {
 
             return (
               <button
-                key={id}
+                key={m.id}
                 type="button"
                 className={`macro-card ${isRunning ? 'running' : ''}`}
-                disabled={busy !== null}
-                onClick={() => run(id)}
+                disabled={(runningLocalId !== null && !isRunning) || busyEspId !== null}
+                onClick={() => void runLocal(m)}
               >
                 <span className="macro-card-icon">
                   <IconMacro size={18} />
                 </span>
-                <span className="macro-card-title">{id}</span>
+                <span className="macro-card-title">{m.name}</span>
                 <span className="macro-card-sub">
-                  {isRunning ? 'In esecuzione…' : 'Tocca per eseguire'}
+                  {isRunning ? 'In esecuzione · tocca per stop' : `${m.steps.length} step`}
                 </span>
               </button>
             );
           })}
         </div>
+      )}
+
+      {/* Sezione opzionale: macro presenti nella NVS dell'ESP */}
+      {espMacros.length > 0 && (
+        <section className="macro-esp-section">
+          <div className="macro-section-head">
+            <span>Salvate sull&apos;ESP</span>
+            <span className="muted-sm">{espMacros.length} / 12 (NVS)</span>
+          </div>
+          <div className="macro-grid">
+            {espMacros.map((id) => {
+              const isRunning = busyEspId === id;
+              const isConfirming = confirmDel === `esp:${id}`;
+
+              if (editMode) {
+                return (
+                  <div key={id} className="macro-card editing">
+                    <span className="macro-card-title">{id}</span>
+                    <div className="macro-card-tools">
+                      <button
+                        type="button"
+                        className="btn-secondary sm"
+                        onClick={() => {
+                          pullingEspRef.current = id;
+                          conn.send({ t: 'macro_get', id });
+                        }}
+                      >
+                        → Telefono
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn-danger sm ${isConfirming ? 'armed' : ''}`}
+                        onClick={() => removeEsp(id)}
+                      >
+                        <IconTrash size={15} />
+                        <span>{isConfirming ? 'Sicuro?' : ''}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`macro-card ${isRunning ? 'running' : ''}`}
+                  disabled={runningLocalId !== null || busyEspId !== null}
+                  onClick={() => runEsp(id)}
+                >
+                  <span className="macro-card-icon esp">
+                    <IconMacro size={18} />
+                  </span>
+                  <span className="macro-card-title">{id}</span>
+                  <span className="macro-card-sub">
+                    {isRunning ? 'In esecuzione su ESP…' : 'Su ESP · tocca per eseguire'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );
@@ -270,13 +554,19 @@ export function MacroView({ conn, macros, vibrate, onToast }: Props) {
 
 function MacroEditor({
   editing,
+  espCount,
+  espIds,
   onChange,
-  onSave,
+  onSaveLocal,
+  onSaveEsp,
   onCancel,
 }: {
   editing: Editing;
+  espCount: number;
+  espIds: string[];
   onChange: (e: Editing) => void;
-  onSave: () => void;
+  onSaveLocal: () => void;
+  onSaveEsp: () => void;
   onCancel: () => void;
 }) {
   const [stepType, setStepType] = useState<StepType>('key');
@@ -287,7 +577,6 @@ function MacroEditor({
   const [mediaIdx, setMediaIdx] = useState(0);
 
   const pushStep = (step: MacroStep) => {
-    if (editing.steps.length >= 64) return;
     onChange({ ...editing, steps: [...editing.steps, step] });
   };
 
@@ -319,40 +608,37 @@ function MacroEditor({
     onChange({ ...editing, steps: editing.steps.filter((_, x) => x !== i) });
   };
 
-  const idOk = /^[a-zA-Z0-9_-]{1,20}$/.test(editing.id);
-  const canSave = idOk && editing.steps.length > 0 && editing.steps.length <= 64;
+  const nameOk = editing.name.trim().length > 0;
+  const canSaveLocal = nameOk && editing.steps.length > 0;
+  const espCheck = validateForEsp(editing.name || 'macro', editing.steps);
+  const espFull = espCheck.ok && !espIds.includes(espCheck.espId) && espCount >= 12;
+  const canSaveEsp = canSaveLocal && espCheck.ok && !espFull;
 
   return (
     <div className="macro-editor">
       <div className="macro-head">
-        <h2>{editing.id ? `Macro: ${editing.id}` : 'Nuova macro'}</h2>
+        <h2>{editing.id ? `Modifica: ${editing.name}` : 'Nuova macro'}</h2>
         <button type="button" className="icon-btn" onClick={onCancel} aria-label="Annulla">
           <IconClose size={20} />
         </button>
       </div>
 
       <label className="field">
-        <span>Nome macro <small className="muted">(a-z, 0-9, - _)</small></span>
+        <span>Nome macro</span>
         <input
           type="text"
-          value={editing.id}
-          onChange={(e) => onChange({ ...editing, id: e.target.value })}
-          placeholder="es. netflix, accedi, copia-url"
-          maxLength={20}
-          autoCapitalize="off"
-          spellCheck={false}
+          value={editing.name}
+          onChange={(e) => onChange({ ...editing, name: e.target.value })}
+          placeholder="es. Terminale + top, Blocca PC, Netflix"
+          maxLength={60}
         />
       </label>
-
-      {!idOk && editing.id.length > 0 && (
-        <p className="callout warn">Usa solo lettere, cifre, trattini o underscore (1–20 caratteri).</p>
-      )}
 
       {/* Inserimento rapido */}
       <div className="editor-card">
         <div className="editor-card-head">
           <span>Aggiungi step</span>
-          <span className="muted-sm">{editing.steps.length} / 64</span>
+          <span className="muted-sm">{editing.steps.length} step</span>
         </div>
 
         <div className="shortcut-strip">
@@ -493,8 +779,23 @@ function MacroEditor({
         <button type="button" className="btn-secondary" onClick={onCancel}>
           Annulla
         </button>
-        <button type="button" className="btn-primary" disabled={!canSave} onClick={onSave}>
-          Salva sull&apos;ESP
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={!canSaveEsp}
+          title={
+            !espCheck.ok
+              ? espCheck.reason
+              : espFull
+                ? 'Memoria ESP piena (12/12)'
+                : `Salva sul telefono e copia anche sull'ESP come "${espCheck.espId}"`
+          }
+          onClick={onSaveEsp}
+        >
+          + Salva su ESP
+        </button>
+        <button type="button" className="btn-primary" disabled={!canSaveLocal} onClick={onSaveLocal}>
+          Salva sul telefono
         </button>
       </div>
     </div>

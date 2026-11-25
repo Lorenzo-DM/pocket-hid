@@ -77,6 +77,7 @@ export default function App() {
               <MacroView
                 conn={conn}
                 macros={device?.macros ?? []}
+                prefs={prefs}
                 vibrate={vibrate}
                 onToast={showToast}
               />

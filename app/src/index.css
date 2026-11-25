@@ -1105,6 +1105,42 @@ button.key.mod.locked {
   gap: 8px;
 }
 
+.macro-io-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.macro-empty-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.macro-esp-section {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #232a39;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.macro-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.macro-card-icon.esp {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+}
+
 .empty-state {
   margin-top: 16px;
   padding: 28px 20px;
@@ -1310,9 +1346,16 @@ button.key.mod.locked {
 .step-btn.danger { color: #fca5a5; }
 
 .macro-editor-actions {
-  display: grid;
-  grid-template-columns: 1fr 1.6fr;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.macro-editor-actions .btn-secondary {
+  flex: 1;
+}
+.macro-editor-actions .btn-primary {
+  flex: 1.5;
+  min-width: 160px;
 }
 
 /* --- Modale Impostazioni (<dialog> nativo) --- */
