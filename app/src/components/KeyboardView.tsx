@@ -10,12 +10,13 @@ interface Props {
   vibrate: (p?: number | number[]) => void;
 }
 
-type PadTab = 'nav' | 'fn' | 'qwerty';
+type PadTab = 'nav' | 'fn' | 'qwerty' | 'symbols';
 type InputMode = 'phrase' | 'live';
 
 interface KeyDef {
   label: string;
   code: number;
+  mods?: number;
   wide?: number;
 }
 
@@ -74,6 +75,43 @@ const QWERTY_ROWS: KeyDef[][] = [
       label: l,
       code: K[l as keyof typeof K],
     })),
+    { label: '⌫', code: K.BACKSPACE, wide: 1.6 },
+  ],
+];
+
+const SYMBOL_ROWS: KeyDef[][] = [
+  ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'].map((label, i) => ({
+    label,
+    code: K.N1 + i,
+    mods: MOD.SHIFT,
+  })),
+  [
+    { label: '-', code: K.MINUS },
+    { label: '_', code: K.MINUS, mods: MOD.SHIFT },
+    { label: '=', code: K.EQUAL },
+    { label: '+', code: K.EQUAL, mods: MOD.SHIFT },
+    { label: '[', code: K.LBRACKET },
+    { label: ']', code: K.RBRACKET },
+    { label: '{', code: K.LBRACKET, mods: MOD.SHIFT },
+    { label: '}', code: K.RBRACKET, mods: MOD.SHIFT },
+  ],
+  [
+    { label: '\\', code: K.BACKSLASH },
+    { label: '|', code: K.BACKSLASH, mods: MOD.SHIFT },
+    { label: ';', code: K.SEMICOLON },
+    { label: ':', code: K.SEMICOLON, mods: MOD.SHIFT },
+    { label: "'", code: K.QUOTE },
+    { label: '"', code: K.QUOTE, mods: MOD.SHIFT },
+    { label: '`', code: K.GRAVE },
+    { label: '~', code: K.GRAVE, mods: MOD.SHIFT },
+  ],
+  [
+    { label: ',', code: K.COMMA },
+    { label: '.', code: K.DOT },
+    { label: '<', code: K.COMMA, mods: MOD.SHIFT },
+    { label: '>', code: K.DOT, mods: MOD.SHIFT },
+    { label: '/', code: K.SLASH },
+    { label: '?', code: K.SLASH, mods: MOD.SHIFT },
     { label: '⌫', code: K.BACKSPACE, wide: 1.6 },
   ],
 ];
@@ -300,7 +338,7 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
           className={`seg-btn ${padTab === 'nav' ? 'active' : ''}`}
           onClick={() => setPadTab('nav')}
         >
-          Nav &amp; Frecce
+          Frecce
         </button>
         <button
           type="button"
@@ -309,7 +347,7 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
           className={`seg-btn ${padTab === 'fn' ? 'active' : ''}`}
           onClick={() => setPadTab('fn')}
         >
-          F1 – F12
+          F1–F12
         </button>
         <button
           type="button"
@@ -319,6 +357,15 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
           onClick={() => setPadTab('qwerty')}
         >
           QWERTY
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={padTab === 'symbols'}
+          className={`seg-btn ${padTab === 'symbols' ? 'active' : ''}`}
+          onClick={() => setPadTab('symbols')}
+        >
+          Simboli
         </button>
       </div>
 
@@ -390,6 +437,40 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
                   className="key qwerty-key"
                   style={k.wide ? { flex: k.wide } : undefined}
                   onClick={() => tapKey(k.code)}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+          ))}
+          <div className="kb-row tight">
+            <button type="button" className="key qwerty-key" style={{ flex: 1.2 }} onClick={() => tapKey(K.ESC)}>
+              Esc
+            </button>
+            <button type="button" className="key qwerty-key" style={{ flex: 1.2 }} onClick={() => tapKey(K.TAB)}>
+              Tab
+            </button>
+            <button type="button" className="key qwerty-key" style={{ flex: 3.6 }} onClick={() => tapKey(K.SPACE)}>
+              Spazio
+            </button>
+            <button type="button" className="key qwerty-key accent-key" style={{ flex: 1.6 }} onClick={() => tapKey(K.ENTER)}>
+              ↵
+            </button>
+          </div>
+        </div>
+      )}
+
+      {padTab === 'symbols' && (
+        <div className="kb-panel qwerty-panel">
+          {SYMBOL_ROWS.map((row, i) => (
+            <div className="kb-row tight" key={i}>
+              {row.map((k) => (
+                <button
+                  key={k.label}
+                  type="button"
+                  className="key qwerty-key symbol-key"
+                  style={k.wide ? { flex: k.wide } : undefined}
+                  onClick={() => tapKey(k.code, k.mods ?? 0)}
                 >
                   {k.label}
                 </button>
