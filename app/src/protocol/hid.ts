@@ -14,6 +14,7 @@ export const K = {
 
   MINUS: 0x2d, EQUAL: 0x2e, LBRACKET: 0x2f, RBRACKET: 0x30, BACKSLASH: 0x31,
   SEMICOLON: 0x33, QUOTE: 0x34, GRAVE: 0x35, COMMA: 0x36, DOT: 0x37, SLASH: 0x38,
+  ISO: 0x64, // Tasto ISO (< > su layout IT)
 
   F1: 0x3a, F2: 0x3b, F3: 0x3c, F4: 0x3d, F5: 0x3e, F6: 0x3f,
   F7: 0x40, F8: 0x41, F9: 0x42, F10: 0x43, F11: 0x44, F12: 0x45,
@@ -41,8 +42,9 @@ export const CONSUMER = {
 
 // Bitmask modificatori
 export const MOD = {
-  CTRL: 1,   // bit0
-  SHIFT: 2,  // bit1
-  ALT: 4,    // bit2
-  GUI: 8,    // bit3
+  CTRL: 1,     // bit0 (Left Ctrl)
+  SHIFT: 2,    // bit1 (Left Shift)
+  ALT: 4,      // bit2 (Left Alt)
+  GUI: 8,      // bit3 (Left GUI / Win)
+  ALTGR: 0x40, // bit6 (Right Alt / AltGr)
 } as const;

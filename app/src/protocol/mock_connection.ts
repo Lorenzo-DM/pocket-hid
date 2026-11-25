@@ -79,6 +79,16 @@ export class MockConnection implements DeviceLink {
         });
         break;
 
+      case 'layout':
+        this.device = { ...this.device, layout: msg.layout };
+        debugLog('info', `demo: layout impostato su ${msg.layout}`);
+        this.later(30, () => {
+          if (this.closed) return;
+          this.emit({ t: 'state', ...this.device });
+          this.cb.onDeviceInfo?.(this.device);
+        });
+        break;
+
       case 'macro_save':
         if (!this.device.macros.includes(msg.id) && this.device.macros.length >= 12) {
           this.later(30, () => this.cb.onError?.('demo: limite macro raggiunto'));

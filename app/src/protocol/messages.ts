@@ -19,6 +19,7 @@ export type OutMsg =
   | { t: 'macro_save'; id: string; steps: MacroStep[] }
   | { t: 'macro_del'; id: string }
   | { t: 'macro_get'; id: string }
+  | { t: 'layout'; layout: 'us' | 'it' }
   | { t: 'state' };
 
 export interface DeviceInfo {

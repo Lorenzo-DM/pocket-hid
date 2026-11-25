@@ -71,13 +71,19 @@ export default function App() {
               <MediaView conn={conn} vibrate={vibrate} />
             )}
             {tab === 'keyboard' && (
-              <KeyboardView conn={conn} prefs={prefs} vibrate={vibrate} />
+              <KeyboardView
+                conn={conn}
+                prefs={prefs}
+                layout={device?.layout ?? 'us'}
+                vibrate={vibrate}
+              />
             )}
             {tab === 'macro' && (
               <MacroView
                 conn={conn}
                 macros={device?.macros ?? []}
                 prefs={prefs}
+                layout={device?.layout ?? 'us'}
                 vibrate={vibrate}
                 onToast={showToast}
               />
@@ -113,6 +119,11 @@ export default function App() {
             transport={transport}
             prefs={prefs}
             onUpdatePref={updatePref}
+            onSetLayout={(layout) => {
+              conn.send({ t: 'layout', layout });
+              vibrate(8);
+              showToast(`Layout tastiera impostato su ${layout.toUpperCase()}`);
+            }}
             onClose={() => setSettingsOpen(false)}
             onDisconnect={disconnect}
           />

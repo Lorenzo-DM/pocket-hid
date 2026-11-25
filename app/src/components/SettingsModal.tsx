@@ -10,6 +10,7 @@ interface Props {
   transport: Transport;
   prefs: Prefs;
   onUpdatePref: <K extends keyof Prefs>(key: K, value: Prefs[K]) => void;
+  onSetLayout: (layout: 'us' | 'it') => void;
   onClose: () => void;
   onDisconnect: () => void;
 }
@@ -20,6 +21,7 @@ export function SettingsModal({
   transport,
   prefs,
   onUpdatePref,
+  onSetLayout,
   onClose,
   onDisconnect,
 }: Props) {
@@ -128,6 +130,51 @@ export function SettingsModal({
           </section>
 
           <section className="settings-group">
+            <h3>Tastiera PC</h3>
+            <div className="range-row">
+              <div className="range-head">
+                <span>Layout tastiera del PC</span>
+                <span className="range-val">{(device?.layout ?? 'us').toUpperCase()}</span>
+              </div>
+              <div className="segmented compact" role="tablist" aria-label="Layout tastiera">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={device?.layout === 'it'}
+                  className={`seg-btn ${device?.layout === 'it' ? 'active' : ''}`}
+                  onClick={() => onSetLayout('it')}
+                >
+                  Italiano (IT)
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={(device?.layout ?? 'us') !== 'it'}
+                  className={`seg-btn ${(device?.layout ?? 'us') !== 'it' ? 'active' : ''}`}
+                  onClick={() => onSetLayout('us')}
+                >
+                  Inglese (US)
+                </button>
+              </div>
+            </div>
+
+            {device?.layout !== 'it' && (
+              <label className="toggle-row">
+                <span>
+                  Adatta caratteri accentati
+                  <small>Su layout US converte à, è, ò… in ASCII (a&apos;, e&apos;, o&apos;)</small>
+                </span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={prefs.transliterate}
+                  onChange={(e) => onUpdatePref('transliterate', e.target.checked)}
+                />
+              </label>
+            )}
+          </section>
+
+          <section className="settings-group">
             <h3>Esperienza</h3>
             <label className="toggle-row">
               <span>
@@ -152,19 +199,6 @@ export function SettingsModal({
                 className="switch"
                 checked={prefs.wakeLock}
                 onChange={(e) => onUpdatePref('wakeLock', e.target.checked)}
-              />
-            </label>
-
-            <label className="toggle-row">
-              <span>
-                Adatta caratteri accentati
-                <small>Converte à, è, ò… in ASCII (a&apos;, e&apos;, o&apos;)</small>
-              </span>
-              <input
-                type="checkbox"
-                className="switch"
-                checked={prefs.transliterate}
-                onChange={(e) => onUpdatePref('transliterate', e.target.checked)}
               />
             </label>
           </section>

@@ -16,6 +16,7 @@ interface Props {
   conn: DeviceLink;
   macros: string[]; // macro salvate sull'ESP (NVS)
   prefs: Prefs;
+  layout: string;
   vibrate: (p?: number | number[]) => void;
   onToast: (text: string, kind?: 'info' | 'error') => void;
 }
@@ -116,7 +117,7 @@ function stepBadge(s: MacroStep): string {
   return 'ATTESA';
 }
 
-export function MacroView({ conn, macros: espMacros, prefs, vibrate, onToast }: Props) {
+export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onToast }: Props) {
   const { macros: localMacros, upsertMacro, deleteMacro, importMacros } = useLocalMacros();
 
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -194,7 +195,7 @@ export function MacroView({ conn, macros: espMacros, prefs, vibrate, onToast }: 
         conn.send({ t: 'key', code: step.k, mods: step.m ?? 0, act: 't' });
         if (!(await sleepCancellable(50, token))) return;
       } else if ('s' in step) {
-        const payload = prefs.transliterate ? transliterateAscii(step.s) : step.s;
+        const payload = layout !== 'it' && prefs.transliterate ? transliterateAscii(step.s) : step.s;
         if (payload) {
           conn.send({ t: 'text', s: payload });
           const estMs = Math.max(80, payload.length * 16 + 40);

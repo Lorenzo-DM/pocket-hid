@@ -7,6 +7,7 @@ import { IconBackspace, IconChevron, IconReturn, IconSend } from './Icons';
 interface Props {
   conn: DeviceLink;
   prefs: Prefs;
+  layout: string;
   vibrate: (p?: number | number[]) => void;
 }
 
@@ -79,7 +80,7 @@ const QWERTY_ROWS: KeyDef[][] = [
   ],
 ];
 
-const SYMBOL_ROWS: KeyDef[][] = [
+const SYMBOL_ROWS_US: KeyDef[][] = [
   ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'].map((label, i) => ({
     label,
     code: K.N1 + i,
@@ -116,7 +117,51 @@ const SYMBOL_ROWS: KeyDef[][] = [
   ],
 ];
 
-export function KeyboardView({ conn, prefs, vibrate }: Props) {
+const SYMBOL_ROWS_IT: KeyDef[][] = [
+  [
+    { label: '!', code: K.N1, mods: MOD.SHIFT },
+    { label: '@', code: K.SEMICOLON, mods: MOD.ALTGR },
+    { label: '#', code: K.QUOTE, mods: MOD.ALTGR },
+    { label: '$', code: K.N4, mods: MOD.SHIFT },
+    { label: '%', code: K.N5, mods: MOD.SHIFT },
+    { label: '^', code: K.EQUAL, mods: MOD.SHIFT },
+    { label: '&', code: K.N6, mods: MOD.SHIFT },
+    { label: '*', code: K.RBRACKET, mods: MOD.SHIFT },
+    { label: '(', code: K.N8, mods: MOD.SHIFT },
+    { label: ')', code: K.N9, mods: MOD.SHIFT },
+  ],
+  [
+    { label: '-', code: K.SLASH },
+    { label: '_', code: K.SLASH, mods: MOD.SHIFT },
+    { label: '=', code: K.N0, mods: MOD.SHIFT },
+    { label: '+', code: K.RBRACKET },
+    { label: '[', code: K.LBRACKET, mods: MOD.ALTGR },
+    { label: ']', code: K.RBRACKET, mods: MOD.ALTGR },
+    { label: '{', code: K.LBRACKET, mods: MOD.SHIFT | MOD.ALTGR },
+    { label: '}', code: K.RBRACKET, mods: MOD.SHIFT | MOD.ALTGR },
+  ],
+  [
+    { label: '\\', code: K.GRAVE },
+    { label: '|', code: K.GRAVE, mods: MOD.SHIFT },
+    { label: ';', code: K.COMMA, mods: MOD.SHIFT },
+    { label: ':', code: K.DOT, mods: MOD.SHIFT },
+    { label: "'", code: K.MINUS },
+    { label: '"', code: K.N2, mods: MOD.SHIFT },
+    { label: '`', code: K.MINUS, mods: MOD.ALTGR },
+    { label: '~', code: K.EQUAL, mods: MOD.ALTGR },
+  ],
+  [
+    { label: ',', code: K.COMMA },
+    { label: '.', code: K.DOT },
+    { label: '<', code: K.ISO },
+    { label: '>', code: K.ISO, mods: MOD.SHIFT },
+    { label: '/', code: K.N7, mods: MOD.SHIFT },
+    { label: '?', code: K.MINUS, mods: MOD.SHIFT },
+    { label: '⌫', code: K.BACKSPACE, wide: 1.6 },
+  ],
+];
+
+export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
   const [inputMode, setInputMode] = useState<InputMode>('phrase');
   const [text, setText] = useState('');
   const [padTab, setPadTab] = useState<PadTab>('nav');
@@ -153,8 +198,11 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
     if (mods !== lockedMods) setMods(lockedMods);
   };
 
+  const isIt = layout === 'it';
+  const symbolRows = isIt ? SYMBOL_ROWS_IT : SYMBOL_ROWS_US;
+
   const sendTextPayload = (raw: string, withEnter = false) => {
-    const payload = prefs.transliterate ? transliterateAscii(raw) : raw;
+    const payload = !isIt && prefs.transliterate ? transliterateAscii(raw) : raw;
     if (payload) conn.send({ t: 'text', s: payload });
     if (withEnter) conn.send({ t: 'key', code: K.ENTER, mods: 0, act: 't' });
     if (payload || withEnter) vibrate(10);
@@ -286,11 +334,11 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
           </div>
         )}
 
-        {nonAscii > 0 && (
+        {!isIt && nonAscii > 0 && (
           <p className="type-note">
             {prefs.transliterate
               ? `Accenti convertiti in ASCII${remainingDropped > 0 ? ' (emoji ignorate)' : ''}.`
-              : `⚠ ${nonAscii} carattere/i non ASCII verranno saltati dal firmware.`}
+              : `⚠ ${nonAscii} carattere/i non ASCII verranno saltati dal firmware (layout US).`}
           </p>
         )}
       </section>
@@ -462,7 +510,7 @@ export function KeyboardView({ conn, prefs, vibrate }: Props) {
 
       {padTab === 'symbols' && (
         <div className="kb-panel qwerty-panel">
-          {SYMBOL_ROWS.map((row, i) => (
+          {symbolRows.map((row, i) => (
             <div className="kb-row tight" key={i}>
               {row.map((k) => (
                 <button
