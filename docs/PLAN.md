@@ -1,4 +1,4 @@
-# MK-Remote — Piano di lavoro
+# PocketHID — Piano di lavoro
 
 > File di ripresa: aggiornare a ogni fase completata, committare.
 > Ultimo aggiornamento: **tutte le 9 fasi scritte**; da fare: test utente completi + hosting pagina flash. Fase 1 verificata su hardware (2025-11-23).
@@ -11,7 +11,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 ## Decisioni architetturali (chiusure definitive)
 
 - **Output**: SOLO USB HID via cavo (TinyUSB, composite keyboard+mouse+consumer). Niente BLE HID verso il target.
-- **Input**: solo 3 trasporti — 🔵 BLE (GATT custom), 🏠 WebSocket su WiFi di casa (mDNS `esp32-hid.local`), 📡 WebSocket su hotspot ESP (captive portal). Nessun altro mezzo (IR, NFC, audio ecc. scartati).
+- **Input**: solo 3 trasporti — 🔵 BLE (GATT custom), 🏠 WebSocket su WiFi di casa (mDNS `pockethid.local`), 📡 WebSocket su hotspot ESP (captive portal). Nessun altro mezzo (IR, NFC, audio ecc. scartati).
 - **Codebase app**: una sola — React+Vite+TS (PWA) con **Capacitor** come guscio nativo iOS/Android. Non Expo.
 - **BLE su iOS**: unico motivo d'esistere del guscio nativo (Web Bluetooth assente su Safari). Su Chrome/Edge desktop+Android la PWA userà Web Bluetooth.
 - **Logica centralizzata nell'ESP32**: mapping testo→keycode, macro, modifier. I canali sono pipe; protocollo identico su tutti i trasporti.
@@ -28,7 +28,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 - **Procedura flash-and-run** (v. `docs/troubleshooting.md` §6 e §9): download mode = power-on con BOOT tenuto; dopo il flash la ROM resta in download mode → serve **unplug/replug del cavo** per avviare l'app (reset esptool via USJ non basta).
 - **Init USB TinyUSB corretto** (era il crash principale): `ARDUINO_USB_MODE=0` + `TinyUSBDevice.begin() → usb_hid_begin() → USB.begin()` in `main.cpp`.
 - Credenziali WiFi: `firmware/src/config_local.h` (gitignored, v. `config_local.h.example`) — NON committare credenziali.
-- Pagina di test standalone: `tools/mk-test.html` (apribile da file://, si connette a `ws://esp32-hid.local/ws`).
+- Pagina di test standalone: `tools/pockethid-test.html` (apribile da file://, si connette a `ws://pockethid.local/ws`).
 
 ## File chiave
 
@@ -43,7 +43,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 ### ✅ Fase 1 — Firmware base (**VERIFICATA su hardware reale, 2025-11-23**)
 - Composite HID TinyUSB (keyboard 6KRO + mouse + consumer), USB-OTG — 3 interfacce HID enumerate
 - WS `ws://<ip>/ws`: hello/welcome, token opzionale, comandi key/text/consumer/mouse/mbtn/scroll/state — handshake e comandi testati via script
-- `GET /status` risponde, mDNS `esp32-hid.local` raggiungibile, WiFi OK
+- `GET /status` risponde, mDNS `pockethid.local` raggiungibile, WiFi OK
 - Limiti: layout US/ASCII only, text bloccante, un client alla volta, macro stub
 - Config: `firmware/src/config.h` + `config_local.h` (gitignored) per le credenziali
 - File di sessione debug: `docs/troubleshooting.md` (flash size, init USB, download mode, CDC log)
@@ -93,7 +93,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 **WiFi/portal** (`wifi_mgr.cpp`):
 - Credenziali in NVS (`mkcfg`: ssid/pass), **priorità su quelle compilate** (fallback iniziale)
-- AP on-demand (modifica post-test): attivo all'avvio e come fallback; si spegne quando lo STA prende IP, riattivato ~15 s dopo una disconnessione persistente. SSID `MK-Remote-XXXX`, WPA2 `MK_AP_PASS` (config.h)
+- AP on-demand (modifica post-test): attivo all'avvio e come fallback; si spegne quando lo STA prende IP, riattivato ~15 s dopo una disconnessione persistente. SSID `PocketHID-XXXX`, WPA2 `MK_AP_PASS` (config.h)
 - Con la PWA montata su LittleFS il portal di config passa a `/portal` (la radice `/` è della PWA); senza PWA il portal resta su `/`
 - Captive portal: DNS wildcard + probe redirect; pagina config `/` con form → `POST /save` → NVS → auto-reboot
 - `GET /wifi-info` diagnostica
@@ -116,7 +116,7 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 
 ### ✅ Fase 7b — Guscio Capacitor Android (installazioni approvate dall'utente; NON compilato)
 - Dipendenze installate (consenso 2025-11-23): `@capacitor/core @capacitor/cli @capacitor/android @capacitor-community/bluetooth-le` (Capacitor 8.6, plugin 8.4) — iOS **non** aggiunto (richiesta esplicita: solo Android)
-- `cap init`: appId `io.mkremote.app`, webDir `dist`; cartella `android/` generata e committata
+- `cap init`: appId `io.pockethid.app`, webDir `dist`; cartella `android/` generata e committata
 - Permessi BLE in `android/app/src/main/AndroidManifest.xml` (BLUETOOTH_SCAN neverForLocation + CONNECT); config `plugins.BluetoothLe`
 - **Refactor BLE client**: `ble_base.ts` (macchina a stati comune: hello/heartbeat/backoff) + `ble_web.ts` (Web Bluetooth) + `ble_native.ts` (BleClient plugin, chunk 244B, CONNECTION_PRIORITY_HIGH per il mouse) — scelta automatica via `Capacitor.isNativePlatform()`
 - Script npm: `cap:sync`, `cap:android` (Android Studio), `cap:run-android`
@@ -147,17 +147,17 @@ L'ESP si presenta al target come tastiera/mouse HID composita; l'app (PWA + gusc
 ### 🧪 Test utente da fare (bloccante per fidarsi delle assunzioni)
 1. **Modalità debug** (nessun hardware): schermata connessione → tab "🐞 Demo" → "Entra in demo" → tutte le 5 tab usabili, badge DEMO, log messaggi col pulsante 🐞 (provare anche tab Macro: save/run/del simulati)
 2. **Ricompilare firmware 0.3.0** (`pio run -e esp32s3`): ⚠️ scaricherà NimBLE-Arduino; ⚠️ cambia partizioni (min_spiffs) → verificare che NVS/credenziali sopravvivano; poi flash porta **UART** (OTG resta per HID) → `GET /status` → `"usb":"mounted"`
-3. Test handshake/console: `ws://esp32-hid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
+3. Test handshake/console: `ws://pockethid.local/ws`, hello + `{t:"key",code:0x1E,act:"t"}` = tasto "1"
 4. `npm run dev` in `app/` → connessione reale → tastiera e testo funzionanti sul target
 5. Tab Trackpad: movimento fluido, tap = click sx, long-press = click dx, 2 dita = scroll, drag coi pulsanti L/R
 6. Tab Tastiera: riga speciale (Stamp, Home, PgSu/PgGiu, Caps…) e tab Media (volume con repeat, play, power)
 7. Tab Macro: crea una macro (es. testo+invio+attesa+play), salva, esegui sul target, verifica che WS resti reattivo durante l'esecuzione, poi elimina
-8. **Captive portal**: connettersi all'AP `MK-Remote-XXXX` (pass in config.h) → apre la config page → salvare credenziali → riavvio → si riconnette alla rete
-9. **BLE da PWA** (fase 7a): Chrome/Edge → tab "🔵 Bluetooth" → "Seleziona dispositivo" → pairing `MK-Remote` → tutte le funzioni (tastiera/trackpad/macro) via BLE; verificare anche riconnessione e `writeWithoutResponse` per il mouse
-10. **BLE da nRF Connect**: pairing con `MK-Remote`, hello su RX char → welcome su notify
+8. **Captive portal**: connettersi all'AP `PocketHID-XXXX` (pass in config.h) → apre la config page → salvare credenziali → riavvio → si riconnette alla rete
+9. **BLE da PWA** (fase 7a): Chrome/Edge → tab "🔵 Bluetooth" → "Seleziona dispositivo" → pairing `PocketHID` → tutte le funzioni (tastiera/trackpad/macro) via BLE; verificare anche riconnessione e `writeWithoutResponse` per il mouse
+10. **BLE da nRF Connect**: pairing con `PocketHID`, hello su RX char → welcome su notify
 11. **OTA**: `http://<ip>/update` → caricare un .bin (anche lo stesso) → verifica reboot e firma version
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
-13. **PWA dall'ESP** (fase 8): dopo `pio run -t uploadfs` → aprire `http://esp32-hid.local/` (o IP) → app completa installabile (icona, offline dopo primo load); verifica default WS e warning BLE senza https
+13. **PWA dall'ESP** (fase 8): dopo `pio run -t uploadfs` → aprire `http://pockethid.local/` (o IP) → app completa installabile (icona, offline dopo primo load); verifica default WS e warning BLE senza https
 14. **Pagina /flash** (fase 9): `pio run -e esp32s3` + `tools/make-flash-release.sh` → pubblicare su host statico HTTPS (v. `tools/flash/README.md`) → installazione firmware da Chrome con ESP Web Tools
 12. **App Android** (fase 7b): `cd app && npm run cap:android` → build in Android Studio → installare sul telefono → tab Bluetooth → pairing → funzioni via plugin
 

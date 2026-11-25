@@ -43,7 +43,7 @@ tools/make-flash-release.sh
 
 ```bash
 # sincronizza la cartella sul server che la serve in HTTPS
-rsync -av tools/flash/ server:/var/www/mk-remote/flash/
+rsync -av tools/flash/ server:/var/www/pocket-hid/flash/
 ```
 
 ## Pubblicare (branch `pages`, se l'istanza lo supporta)

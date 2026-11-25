@@ -35,7 +35,7 @@ cp "$BOOT_APP0"            "$OUT/boot_app0.bin"
 
 cat > "$OUT/manifest.json" <<EOF
 {
-  "name": "MK-Remote",
+  "name": "PocketHID",
   "version": "$VERSION",
   "new_install_prompt_erase": true,
   "builds": [

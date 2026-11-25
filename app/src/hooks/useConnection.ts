@@ -24,7 +24,7 @@ export function defaultWsUrl(): string {
   if (isServedByEsp()) {
     return `ws://${location.host}/ws`;
   }
-  return 'ws://esp32-hid.local/ws';
+  return 'ws://pockethid.local/ws';
 }
 
 export function currentTransport(): Transport {

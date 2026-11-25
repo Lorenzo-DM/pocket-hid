@@ -193,7 +193,7 @@ static String build_portal_html() {
     "<!doctype html><html lang='it'><head>"
     "<meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>MK-Remote — Config WiFi</title>"
+    "<title>PocketHID — Config WiFi</title>"
     "<style>"
     "body{font-family:system-ui,sans-serif;background:#101216;color:#e6e8ec;"
     "max-width:420px;margin:0 auto;padding:24px}"
@@ -203,7 +203,7 @@ static String build_portal_html() {
     "background:#4a90d9;color:#fff;font-size:1rem;font-weight:600}"
     ".m{color:#8b909b;font-size:.85rem}"
     "</style></head><body>"
-    "<h1>MK-Remote</h1>"
+    "<h1>PocketHID</h1>"
     "<p class='m'>Configurazione WiFi: le credenziali vengono salvate sul dispositivo (NVS).</p>"
     "<form method='POST' action='/save'>"
     "<p>SSID<br><input name='ssid' maxlength='32' autocomplete='off' required></p>"
@@ -218,7 +218,7 @@ static String build_portal_html() {
 static const char SAVED_HTML[] =
   "<!doctype html><html lang='it'><head><meta charset='utf-8'>"
   "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-  "<title>MK-Remote</title></head>"
+  "<title>PocketHID</title></head>"
   "<body style='font-family:system-ui;padding:24px'>"
   "<p>Credenziali salvate. Il dispositivo si riavvia tra poco…</p>"
   "</body></html>";

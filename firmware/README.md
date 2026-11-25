@@ -1,4 +1,4 @@
-# Firmware ESP32-S3 — MK-Remote
+# Firmware ESP32-S3 — PocketHID
 
 ## Stack
 
@@ -37,7 +37,7 @@ firmware/
 - Trasporti comandi: **WebSocket** (`ws://<ip>/ws`, auth per-client con timeout 5 s, multi-frame) e **BLE GATT** (UUID custom, pairing cifrato obbligatorio, MTU 247, chunking RX e TX)
 - **Router comandi condiviso** (`commands.cpp`): key, text (non-bloccante, US/ASCII), consumer, mouse (con coalescing), mbtn, scroll, state, macro_run/save/del/get
 - **Macro**: persistenza NVS con validazione al salvataggio, player non-bloccante su `loop()`
-- **WiFi**: credenziali in NVS (fallback a config compilata), AP `MK-Remote-XXXX` on-demand con captive portal (`/portal` con PWA, `/` senza PWA) e mDNS su rete di casa
+- **WiFi**: credenziali in NVS (fallback a config compilata), AP `PocketHID-XXXX` on-demand con captive portal (`/portal` con PWA, `/` senza PWA) e mDNS su rete di casa
 - **PWA da LittleFS** (`partitions_4mb.csv`: 2×1,75 MB OTA + 384 KB LittleFS)
 - **OTA**: `GET /update` + `POST /update` (multipart, protetto da `MK_TOKEN` se configurato, reboot differito su `loop()`)
 - Endpoint HTTP: `/status`, `/wifi-info`, `/update`, `/portal` (o `/`)

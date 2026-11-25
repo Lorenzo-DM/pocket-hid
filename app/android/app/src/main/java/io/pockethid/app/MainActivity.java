@@ -1,4 +1,4 @@
-package io.mkremote.app;
+package io.pockethid.app;
 
 import com.getcapacitor.BridgeActivity;
 

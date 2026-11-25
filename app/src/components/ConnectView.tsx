@@ -74,7 +74,7 @@ export function ConnectView({
             </svg>
           </div>
           <div>
-            <h1>MK-Remote</h1>
+            <h1>PocketHID</h1>
             <p className="muted">Mouse, tastiera e macro per PC, TV e ogni dispositivo USB</p>
           </div>
         </div>
@@ -110,7 +110,7 @@ export function ConnectView({
                   type="text"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="ws://esp32-hid.local/ws"
+                  placeholder="ws://pockethid.local/ws"
                   autoComplete="off"
                   autoCapitalize="off"
                   spellCheck={false}
@@ -141,7 +141,7 @@ export function ConnectView({
               </>
             ) : (
               <>
-                Seleziona <strong>MK-Remote</strong> nella finestra Bluetooth del dispositivo. Al primo utilizzo conferma il pairing.
+                Seleziona <strong>PocketHID</strong> nella finestra Bluetooth del dispositivo. Al primo utilizzo conferma il pairing.
               </>
             )}
           </div>
@@ -172,7 +172,7 @@ export function ConnectView({
 
         {transport === 'ws' && (
           <p className="hint-sm">
-            Collega il telefono alla stessa WiFi dell&apos;ESP32 o al suo hotspot <code>MK-Remote</code>.
+            Collega il telefono alla stessa WiFi dell&apos;ESP32 o al suo hotspot <code>PocketHID</code>.
           </p>
         )}
       </form>

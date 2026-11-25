@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compila, testa e carica tutto il progetto MK-Remote (PWA + firmware ESP32-S3).
+# Compila, testa e carica tutto il progetto PocketHID (PWA + firmware ESP32-S3).
 #
 # Uso:
 #   ./tools/deploy-all.sh                 # test + build + upload firmware e LittleFS

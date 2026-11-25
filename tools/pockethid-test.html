@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<title>MK-Remote — pagina di test</title>
+<title>PocketHID — pagina di test</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 1.5rem; background:#111; color:#ddd; max-width: 640px; }
   h1 { font-size: 1.2rem; }
@@ -19,18 +19,18 @@
 </style>
 </head>
 <body>
-<h1>MK-Remote — pagina di test</h1>
+<h1>PocketHID — pagina di test</h1>
 
 <section>
   <output id="status">disconnesso</output><br><br>
-  <label>Host: <input id="host" value="ws://esp32-hid.local/ws" size="28"></label>
+  <label>Host: <input id="host" value="ws://pockethid.local/ws" size="28"></label>
   <label>Token: <input id="token" value="" size="12" placeholder="(vuoto ok)"></label>
   <button id="btnConnect">Connetti</button>
 </section>
 
 <section>
   <h2>Testo da digitare</h2>
-  <input id="txt" value="ciao dal firmware MK-Remote!" size="34">
+  <input id="txt" value="ciao dal firmware PocketHID!" size="34">
   <button class="act" data-act="text">Digita</button>
 </section>
 

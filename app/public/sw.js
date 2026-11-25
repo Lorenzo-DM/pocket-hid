@@ -1,4 +1,4 @@
-// Service Worker MK-Remote — cache offline scritta a mano (niente plugin):
+// Service Worker PocketHID — cache offline scritta a mano (niente plugin):
 // - navigazioni: network-first con fallback cache (aggiornamenti sempre freschi
 //   quando c'e' rete, app usabile anche offline)
 // - asset statici (js/css/svg): stale-while-revalidate

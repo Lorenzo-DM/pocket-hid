@@ -1,5 +1,5 @@
 {
-  "name": "MK-Remote",
+  "name": "PocketHID",
   "version": "0.0.0-TEMPLATE",
   "new_install_prompt_erase": true,
   "builds": [

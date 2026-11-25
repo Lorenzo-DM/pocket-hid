@@ -1,4 +1,4 @@
-# Tabella partizioni custom per MK-Remote (flash 4 MB, ESP32-S3)
+# Tabella partizioni custom per PocketHID (flash 4 MB, ESP32-S3)
 # Base min_spiffs, con slot app ridotti a 1,75 MB ciascuno e filesystem
 # LittleFS ingrandito a 384 KB per contenere la PWA (~280 KB).
 # NVS resta a 0x9000 (default): le credenziali sopravvivono al cambio tabella.

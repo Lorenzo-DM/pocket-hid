@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MK-Remote — Macro Studio</title>
+  <title>PocketHID — Macro Studio</title>
   <style>
     :root {
       color-scheme: dark;
@@ -197,7 +197,7 @@
 <body>
   <header>
     <div>
-      <h1>MK-Remote <span>· Macro Studio</span></h1>
+      <h1>PocketHID <span>· Macro Studio</span></h1>
       <div class="muted">Registra o componi macro dal PC, esporta il file JSON e importalo nella PWA sul telefono.</div>
     </div>
     <a href="./index.html">← Torna al Flash Firmware</a>
@@ -808,8 +808,8 @@
       $('btnExportAll').onclick = () => {
         const valid = macros.filter((m) => m.steps.length > 0);
         if (valid.length === 0) { setStatus('Nessuna macro con step da esportare.', true); return; }
-        downloadJson({ version: 1, macros: valid.map(({ name, steps }) => ({ name, steps })) }, 'mk-remote-macros.json');
-        setStatus(`Esportate ${valid.length} macro in mk-remote-macros.json.`);
+        downloadJson({ version: 1, macros: valid.map(({ name, steps }) => ({ name, steps })) }, 'pocket-hid-macros.json');
+        setStatus(`Esportate ${valid.length} macro in pocket-hid-macros.json.`);
       };
 
       $('btnCopyJson').onclick = async () => {
@@ -866,7 +866,7 @@
           return;
         }
         try {
-          setStatus('Seleziona MK-Remote nella finestra Bluetooth…');
+          setStatus('Seleziona PocketHID nella finestra Bluetooth…');
           const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_SVC] }] });
           const server = await dev.gatt.connect();
           const svc = await server.getPrimaryService(BLE_SVC);

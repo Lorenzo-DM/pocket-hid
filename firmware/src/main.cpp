@@ -20,7 +20,7 @@ void setup() {
 
   Serial.begin(115200);
 
-  Serial.printf("\n[main] MK-Remote firmware %s\n", MK_FW_VERSION);
+  Serial.printf("\n[main] PocketHID firmware %s\n", MK_FW_VERSION);
   Serial.printf("[main] USB HID init, mounted=%d\n", usb_hid_mounted());
 
   // Coda comandi + NVS macro: va inizializzata prima dei trasporti (BLE / WS)

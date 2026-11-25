@@ -279,7 +279,7 @@ scolca e ricollega il cavo senza premere nulla
 
 # 5) verifica
 lsusb -d 303a:1001 -v | grep -c "Human Interface Device"   # attese 3 interfacce
-curl http://esp32-hid.local/status                          # {"fw":"0.1.0",...}
+curl http://pockethid.local/status                          # {"fw":"0.1.0",...}
 ```
 
 ## 10. Strumenti utili usati in questa sessione

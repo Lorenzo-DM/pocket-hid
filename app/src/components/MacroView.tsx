@@ -284,7 +284,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'mk-remote-macros.json';
+    a.download = 'pocket-hid-macros.json';
     a.click();
     URL.revokeObjectURL(url);
     onToast(`Esportate ${localMacros.length} macro in JSON`);

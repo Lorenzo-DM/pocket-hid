@@ -335,7 +335,7 @@ static String build_ota_html() {
   String html =
     "<!doctype html><html lang='it'><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>MK-Remote OTA</title></head>"
+    "<title>PocketHID OTA</title></head>"
     "<body style='font-family:system-ui;padding:24px;max-width:420px;margin:0 auto'>"
     "<h1>Aggiornamento firmware</h1>"
     "<form method='POST' action='/update' enctype='multipart/form-data'>";

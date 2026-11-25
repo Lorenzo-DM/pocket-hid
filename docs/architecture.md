@@ -1,4 +1,4 @@
-# MK-Remote — Architecture
+# PocketHID — Architecture
 
 Tastiera/mouse virtuale: app su telefono → ESP32-S3 → dispositivo target.
 

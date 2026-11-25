@@ -51,7 +51,7 @@ export function StatusBar({ status, device, transport, onOpenSettings, onDisconn
           </span>
         )}
         {!isReconnecting && !usbMissing && device && (
-          <span className="status-meta">MK-Remote</span>
+          <span className="status-meta">PocketHID</span>
         )}
       </div>
 

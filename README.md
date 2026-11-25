@@ -1,4 +1,4 @@
-# MK-Remote
+# PocketHID
 
 Tastiera/mouse virtuale per smart TV e PC: app sul telefono → ESP32-S3 → cavo USB → target.
 
@@ -13,7 +13,7 @@ Tastiera/mouse virtuale per smart TV e PC: app sul telefono → ESP32-S3 → cav
 ```
 app/        Web app React+Vite+TS + guscio Capacitor Android (BLE via plugin)
 firmware/   Firmware ESP32-S3 (PlatformIO / Arduino): TinyUSB HID, NimBLE, macro, portal, OTA
-tools/      mk-test.html (pagine di test) · flash/ (installazione firmware dal browser)
+tools/      pockethid-test.html (pagine di test) · flash/ (installazione firmware dal browser)
 docs/       protocol.md (fonte di verità) · architecture.md · troubleshooting.md · PLAN.md
 ```
 
@@ -33,4 +33,4 @@ docs/       protocol.md (fonte di verità) · architecture.md · troubleshooting
 
 ## Stato
 
-Fasi 1–9 implementate (v. [docs/PLAN.md](docs/PLAN.md) per lo stato test). Firmware operativo su hardware reale; app testabile via PWA (WiFi/Web Bluetooth), app Android (Capacitor) e pagina di test standalone `tools/mk-test.html`.
+Fasi 1–9 implementate (v. [docs/PLAN.md](docs/PLAN.md) per lo stato test). Firmware operativo su hardware reale; app testabile via PWA (WiFi/Web Bluetooth), app Android (Capacitor) e pagina di test standalone `tools/pockethid-test.html`.

@@ -1,7 +1,7 @@
 {
-  "name": "MK-Remote",
-  "short_name": "MK-Remote",
-  "description": "Tastiera, mouse e macro remoti via ESP32-HID",
+  "name": "PocketHID",
+  "short_name": "PocketHID",
+  "description": "Tastiera, mouse e macro remoti via USB HID (ESP32-S3)",
   "id": "/",
   "start_url": "/",
   "scope": "/",
