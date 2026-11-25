@@ -120,6 +120,8 @@ fi
 
 # 4. Web flasher release (opzionale)
 if [ "$DO_RELEASE" -eq 1 ]; then
+  step "Build LittleFS image (pio run -t buildfs)"
+  (cd "$ROOT/firmware" && "$PIO" run -e esp32s3 -t buildfs)
   step "Aggiornamento tools/flash/"
   "$ROOT/tools/make-flash-release.sh"
 fi

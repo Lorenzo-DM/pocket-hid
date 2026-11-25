@@ -1,0 +1,83 @@
+name: Release & Web Flasher
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build firmware, LittleFS & Web Flasher
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      - name: Run checks & build PWA
+        run: |
+          (cd app && npm ci && npm run lint)
+          ./tools/deploy-pwa.sh --prep-only
+      - name: Test and build firmware + LittleFS
+        working-directory: firmware
+        run: |
+          pio test -e native
+          pio run -e esp32s3
+          pio run -e esp32s3 -t buildfs
+      - name: Assemble Web Flasher bundle
+        run: ./tools/make-flash-release.sh
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: tools/flash
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            tools/flash/firmware.bin
+            tools/flash/littlefs.bin
+            tools/flash/bootloader.bin
+            tools/flash/partitions.bin
+            tools/flash/boot_app0.bin
+            tools/flash/manifest.json
+
+  deploy-pages:
+    name: Deploy Web Flasher to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Assembla tools/flash/ con i binari prodotti da PlatformIO + manifest.json
-# per la pagina di flash web (ESP Web Tools).
+# Assemble tools/flash/ with PlatformIO firmware + LittleFS binaries and
+# manifest.json for ESP Web Tools (browser installer).
 #
-# Uso:
-#   1) pio run -e esp32s3           (in firmware/)
-#   2) tools/make-flash-release.sh
-#   3) pubblicare tools/flash/ su GitHub Pages (v. tools/flash/README.md)
+# Usage:
+#   1) ./tools/deploy-pwa.sh --prep-only
+#   2) (cd firmware && pio run -e esp32s3 && pio run -e esp32s3 -t buildfs)
+#   3) ./tools/make-flash-release.sh
 
 set -euo pipefail
 
@@ -17,20 +17,26 @@ CORE_DIR="${PLATFORMIO_CORE_DIR:-$HOME/.platformio}"
 BOOT_APP0="$CORE_DIR/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
 
 missing=0
-for f in "$BUILD/firmware.bin" "$BUILD/bootloader.bin" "$BUILD/partitions.bin" "$BOOT_APP0"; do
-  if [ ! -f "$f" ]; then echo "mancante: $f"; missing=1; fi
+for f in "$BUILD/firmware.bin" "$BUILD/bootloader.bin" "$BUILD/partitions.bin" "$BUILD/littlefs.bin" "$BOOT_APP0"; do
+  if [ ! -f "$f" ]; then
+    echo "missing: $f" >&2
+    missing=1
+  fi
 done
 if [ "$missing" = 1 ]; then
-  echo "Compilare prima: pio run -e esp32s3   (in firmware/)"
+  echo "Build firmware and LittleFS first:" >&2
+  echo "  ./tools/deploy-pwa.sh --prep-only" >&2
+  echo "  (cd firmware && pio run -e esp32s3 && pio run -e esp32s3 -t buildfs)" >&2
   exit 1
 fi
 
 VERSION=$(grep -o 'MK_FW_VERSION "[^"]*"' "$FW_DIR/src/config.h" | cut -d'"' -f2)
-[ -n "$VERSION" ] || { echo "versione non trovata in config.h"; exit 1; }
+[ -n "$VERSION" ] || { echo "MK_FW_VERSION not found in config.h" >&2; exit 1; }
 
 cp "$BUILD/firmware.bin"   "$OUT/firmware.bin"
 cp "$BUILD/bootloader.bin" "$OUT/bootloader.bin"
 cp "$BUILD/partitions.bin" "$OUT/partitions.bin"
+cp "$BUILD/littlefs.bin"   "$OUT/littlefs.bin"
 cp "$BOOT_APP0"            "$OUT/boot_app0.bin"
 
 cat > "$OUT/manifest.json" <<EOF
@@ -45,7 +51,8 @@ cat > "$OUT/manifest.json" <<EOF
         { "path": "bootloader.bin", "offset": 0 },
         { "path": "partitions.bin", "offset": 32768 },
         { "path": "boot_app0.bin", "offset": 57344 },
-        { "path": "firmware.bin", "offset": 65536 }
+        { "path": "firmware.bin", "offset": 65536 },
+        { "path": "littlefs.bin", "offset": 3735552 }
       ]
     }
   ]
@@ -53,4 +60,4 @@ cat > "$OUT/manifest.json" <<EOF
 EOF
 
 ls -la "$OUT"
-echo "OK: tools/flash aggiornato (fw $VERSION)"
+echo "OK: tools/flash updated (fw $VERSION + LittleFS PWA)"

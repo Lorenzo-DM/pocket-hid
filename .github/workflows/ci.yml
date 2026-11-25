@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: App (lint & build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  firmware:
+    name: Firmware (native tests, ESP32-S3 & LittleFS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+      - name: Run native unit tests
+        working-directory: firmware
+        run: pio test -e native
+      - name: Build and prepare PWA for LittleFS
+        run: |
+          (cd app && npm ci)
+          ./tools/deploy-pwa.sh --prep-only
+      - name: Build ESP32-S3 firmware and LittleFS image
+        working-directory: firmware
+        run: |
+          pio run -e esp32s3
+          pio run -e esp32s3 -t buildfs
