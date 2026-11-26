@@ -1,11 +1,11 @@
-// Base comune dei client BLE: handshake hello/welcome, heartbeat {t:"state"},
-// riconnessione con backoff, dispatch messaggi. Le sottoclassi implementano
-// solo le primitive della piattaforma (scelta device, GATT, write, notify).
+// Common base for BLE clients: hello/welcome handshake, {t:"state"} heartbeat,
+// backoff reconnection, and message dispatch. Subclasses implement only
+// platform primitives (device picker, GATT, write, notify).
 
 import { parseInMsg, serialize, type DeviceInfo, type InMsg, type OutMsg } from './messages';
 import type { ConnectionCallbacks, ConnStatus, DeviceLink } from './connection';
 
-// UUID in docs/protocol.md — devono combaciare con firmware/src/ble_server.cpp
+// UUIDs from docs/protocol.md — must match firmware/src/ble_server.cpp
 export const BLE_SVC = '7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f';
 export const BLE_RX = '7a0c1001-8b6d-4d3f-9a2e-5f1c2b3d4e5f'; // app -> ESP
 export const BLE_TX = '7a0c1002-8b6d-4d3f-9a2e-5f1c2b3d4e5f'; // ESP -> app
@@ -53,8 +53,8 @@ export abstract class BleBase implements DeviceLink {
   }
 
   send(msg: OutMsg): boolean {
-    // mouse/scroll sono piccoli e ripetuti: il trasporto puo' usare il canale
-    // veloce (write-without-response); gli altri valgono la via affidabile
+    // mouse/scroll are small and frequent: transport can use the fast path
+    // (write-without-response); other messages use reliable writes
     const urgent = msg.t === 'mouse' || msg.t === 'scroll';
     this.writeRaw(encoder.encode(serialize(msg)), urgent);
     return true;
@@ -64,18 +64,18 @@ export abstract class BleBase implements DeviceLink {
     this.cb.onStatus?.(s, detail);
   }
 
-  // --- primitive specifiche piattaforma ---
+  // --- platform-specific primitives ---
 
-  // Sceglie il device (gesto utente) e apre GATT+service+chars+notify.
-  // Deve risolvere a connessione e notifiche attive.
+  // Pick device (user gesture) and open GATT + service + chars + notifications.
+  // Must resolve once connected and notifications are active.
   protected abstract open(): Promise<void>;
 
-  // Scrive i byte; urgent=true -> può usare il canale senza risposta
+  // Write raw bytes; urgent=true may use write-without-response
   protected abstract writeRaw(data: Uint8Array, urgent: boolean): void;
 
   protected abstract releaseDevice(): void;
 
-  // --- da chiamare dalle sottoclassi ---
+  // --- called by subclasses ---
 
   protected handleNotify(data: DataView) {
     const chunk = this.rxDecoder.decode(data, { stream: true });
@@ -94,7 +94,7 @@ export abstract class BleBase implements DeviceLink {
 
     const msg = parseInMsg(this.rxBuf);
     if (!msg) {
-      // Risposta spezzata su piu' notify (es. macro_data > MTU): attende il chunk successivo
+      // Response split across multiple notifications (e.g. macro_data > MTU): wait for next chunk
       this.rxTimer = setTimeout(() => {
         this.resetRx();
       }, RX_CHUNK_TIMEOUT_MS);

@@ -20,8 +20,8 @@ interface Props {
   vibrate: (p?: number | number[]) => void;
 }
 
-// Telecomando universale: D-Pad + navigazione (Smart TV / media center / presentazioni)
-// + controlli multimediali, volume, luminosità e Power con protezione doppio tocco.
+// Universal remote: D-Pad + navigation (Smart TV / media center / presentations)
+// + media controls, volume, brightness, and double-tap protected Power button.
 
 const REPEAT_DELAY_MS = 380;
 const REPEAT_INTERVAL_MS = 130;

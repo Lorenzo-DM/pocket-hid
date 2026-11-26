@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: 'io.pockethid.app',
   appName: 'PocketHID',
   webDir: 'dist',
-  // BLE plugin: evita che lo scan richieda i servizi di localizzazione
+  // BLE plugin: avoid requiring location services for scanning
   plugins: {
     BluetoothLe: {
       displayUuidsInScanResults: false,

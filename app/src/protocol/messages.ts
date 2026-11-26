@@ -1,11 +1,11 @@
-// Tipi messaggi — schema in docs/protocol.md (fonte di verità)
+// Message types — schema in docs/protocol.md (source of truth)
 
-// Step macro: v. docs/protocol.md "Formato step macro"
+// Macro steps: see docs/protocol.md
 export type MacroStep =
-  | { k: number; m?: number } // tap tasto (keycode HID + mods)
-  | { s: string }             // testo
+  | { k: number; m?: number } // key tap (HID keycode + mods)
+  | { s: string }             // text
   | { c: number }             // consumer/media
-  | { w: number };            // attesa ms
+  | { w: number };            // wait in ms
 
 export type OutMsg =
   | { t: 'hello'; v: number; caps?: string[]; token?: string }
@@ -41,7 +41,7 @@ export function parseInMsg(raw: string): InMsg | null {
     const o = JSON.parse(raw);
     if (o && typeof o.t === 'string') return o as InMsg;
   } catch {
-    // non-JSON: ignora
+    // non-JSON: ignore
   }
   return null;
 }

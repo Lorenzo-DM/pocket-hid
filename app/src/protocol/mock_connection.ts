@@ -1,13 +1,13 @@
-// Connessione simulata per la modalità debug: nessun ESP richiesto.
-// Simula handshake (hello/welcome), risponde agli heartbeat `state` e
-// logga ogni messaggio nel log di debug on-screen.
+// Simulated connection for demo/debug mode: no ESP32 hardware required.
+// Simulates hello/welcome handshake, replies to `state` heartbeats, and
+// logs every message in the on-screen debug log.
 
 import type { ConnectionCallbacks, ConnStatus, DeviceLink } from './connection';
 import type { DeviceInfo, InMsg, MacroStep, OutMsg } from './messages';
 import { debugLog } from './debug';
 
-// Nella demo la lista macro vive qui: save/del la modificano e il successivo
-// state la restituisce, come farebbe l'ESP.
+// In demo mode the macro list lives here: save/del update it and subsequent
+// `state` replies return it, just like the ESP32 firmware.
 const fakeDevice: DeviceInfo = {
   fw: '0.3.0-demo',
   layout: 'us',
@@ -71,7 +71,7 @@ export class MockConnection implements DeviceLink {
 
     switch (msg.t) {
       case 'state':
-        // heartbeat: la demo risponde come farebbe l'ESP
+        // heartbeat: demo replies just like the ESP32
         this.later(30, () => {
           if (this.closed) return;
           debugLog('rx', JSON.stringify({ t: 'state', ...this.device }));

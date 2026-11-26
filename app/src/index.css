@@ -61,7 +61,7 @@ button, input, select {
   color: var(--text);
 }
 
-/* --- Bottoni base --- */
+/* --- Base buttons --- */
 
 .btn-primary,
 .btn-secondary,
@@ -199,7 +199,7 @@ button.link {
   white-space: nowrap;
 }
 
-/* --- Callout & campi --- */
+/* --- Callout & fields --- */
 
 .callout {
   margin: 0;
@@ -254,7 +254,7 @@ button.link {
   border-color: var(--accent);
 }
 
-/* --- Schermata Connessione --- */
+/* --- Connect screen --- */
 
 .connect-wrap {
   flex: 1;
@@ -674,7 +674,7 @@ button.link {
   border-color: var(--accent);
 }
 
-/* --- Telecomando (D-Pad + Media) --- */
+/* --- Remote (D-Pad + Media) --- */
 
 .remote {
   width: 100%;
@@ -862,7 +862,7 @@ button.link {
   border-color: var(--accent);
 }
 
-/* --- Tastiera & Testo unificati --- */
+/* --- Unified Keyboard & Text --- */
 
 .keyboard-screen {
   width: 100%;
@@ -1358,7 +1358,7 @@ button.key.mod.locked {
   min-width: 160px;
 }
 
-/* --- Modale Impostazioni (<dialog> nativo) --- */
+/* --- Settings Modal (native <dialog>) --- */
 
 .modal-dialog {
   margin: auto;
@@ -1544,7 +1544,7 @@ button.key.mod.locked {
   color: #fecaca;
 }
 
-/* --- Debug log flottante (solo modalità Demo) --- */
+/* --- Floating Debug Log (Demo mode only) --- */
 
 .debuglog {
   position: fixed;

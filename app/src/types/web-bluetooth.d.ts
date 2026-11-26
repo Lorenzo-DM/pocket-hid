@@ -1,6 +1,6 @@
-// Tipi minimi Web Bluetooth (sottoinsieme di quanto serve all'app).
-// Evita la dipendenza @types/web-bluetooth; le interfacce si fondono con
-// lib.dom quando il browser le espone.
+// Minimal Web Bluetooth types (subset used by this app).
+// Avoids depending on @types/web-bluetooth; interfaces merge with lib.dom
+// when exposed by the browser.
 
 interface BluetoothRemoteGATTProperties {
   write?: boolean;

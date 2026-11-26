@@ -1,9 +1,8 @@
-// Service Worker PocketHID — cache offline scritta a mano (niente plugin):
-// - navigazioni: network-first con fallback cache (aggiornamenti sempre freschi
-//   quando c'e' rete, app usabile anche offline)
-// - asset statici (js/css/svg): stale-while-revalidate
-// Nota: la pagina connettiva resta la stessa; la cache rende l'app avviabile
-// anche quando l'ESP non risponde (poi l'utente sceglie BLE).
+// PocketHID Service Worker — hand-written offline cache (no build plugin):
+// - navigations: network-first with cache fallback (fresh updates when online,
+//   app remains usable offline)
+// - static assets (js/css/svg/png): stale-while-revalidate
+// Note: keeps the app launchable even when the ESP32 is unreachable (e.g. for BLE).
 
 const CACHE = 'mk-pwa-v3';
 
@@ -37,7 +36,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // stale-while-revalidate per gli asset
+  // stale-while-revalidate for assets
   event.respondWith(
     caches.match(req).then((cached) => {
       const refresh = fetch(req)

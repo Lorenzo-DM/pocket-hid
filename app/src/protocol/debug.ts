@@ -1,5 +1,5 @@
-// Modalità debug/demo: consente di usare l'app senza ESP, con una
-// connessione simulata e un log on-screen dei messaggi scambiati.
+// Debug/demo mode: lets you use the app without an ESP32, with a simulated
+// connection and an on-screen log of exchanged messages.
 
 const DEBUG_KEY = 'mk.debug';
 
@@ -16,11 +16,11 @@ export function setDebugMode(on: boolean): void {
     if (on) localStorage.setItem(DEBUG_KEY, '1');
     else localStorage.removeItem(DEBUG_KEY);
   } catch {
-    // storage non disponibile: il flag vale solo per questa sessione
+    // storage unavailable: flag applies only to this session
   }
 }
 
-// ---- log condiviso (tx/rx/info) ----
+// ---- shared log (tx/rx/info) ----
 
 export interface LogLine {
   dir: 'tx' | 'rx' | 'info';

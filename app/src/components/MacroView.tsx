@@ -14,7 +14,7 @@ import { IconClose, IconEdit, IconMacro, IconPlus, IconTrash } from './Icons';
 
 interface Props {
   conn: DeviceLink;
-  macros: string[]; // macro salvate sull'ESP (NVS)
+  macros: string[]; // macros stored on ESP32 (NVS)
   prefs: Prefs;
   layout: string;
   vibrate: (p?: number | number[]) => void;

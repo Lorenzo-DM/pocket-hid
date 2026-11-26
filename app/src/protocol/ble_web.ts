@@ -1,11 +1,11 @@
-// Client BLE via Web Bluetooth (Chrome/Edge desktop+Android).
-// requestDevice richiede il gesto utente solo alla prima scelta: la
-// riconnessione riusa il device già selezionato senza nuovo gesto.
+// BLE client via Web Bluetooth (Chrome/Edge desktop + Android).
+// requestDevice requires a user gesture only on the first pick; reconnecting
+// reuses the previously selected device without another gesture.
 
 import { BleBase, BLE_SVC, BLE_RX, BLE_TX } from './ble_base';
 
-// oltre questa dimensione si usa la long write (con risposta), che il SO
-// frammenta; sotto, write-without-response (latenza minima)
+// Above this size, use long write (with response), which the OS fragments;
+// below it, use write-without-response for minimal latency.
 const FAST_WRITE_MAX = 244;
 
 export class WebBleLink extends BleBase {
@@ -47,7 +47,7 @@ export class WebBleLink extends BleBase {
         if (ch.value) this.handleNotify(ch.value);
       });
 
-      // handshake (il pairing è già avvenuto: write cifrata accettata)
+      // Handshake (pairing already completed: encrypted write accepted)
       this.sendHello();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

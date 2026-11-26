@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { clearDebugLog, getDebugLog, subscribeDebugLog } from '../protocol/debug';
 import { IconBug } from './Icons';
 
-// Pannello flottante con gli ultimi messaggi tx/rx (solo modalità debug).
+// Floating panel showing recent tx/rx messages (demo/debug mode only).
 
 export function DebugLog({ aboveNav = false }: { aboveNav?: boolean }) {
   const [open, setOpen] = useState(false);

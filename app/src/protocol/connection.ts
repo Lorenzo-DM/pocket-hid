@@ -1,6 +1,6 @@
-// Client WebSocket: handshake hello/welcome, auth token, riconnessione con
-// backoff esponenziale, heartbeat a livello applicazione (il browser non
-// espone i frame ping del protocollo WebSocket).
+// WebSocket client: hello/welcome handshake, auth token, exponential backoff
+// reconnection, and application-level heartbeat (browsers do not expose
+// WebSocket protocol ping frames).
 
 import { parseInMsg, serialize, type DeviceInfo, type InMsg, type OutMsg } from './messages';
 
@@ -19,15 +19,14 @@ export interface ConnectionCallbacks {
   onError?: (msg: string) => void;
 }
 
-// Superficie pubblica usata dall'app. Implementata sia dalla Connection
-// reale (WebSocket) sia dalla MockConnection (modalità debug/demo).
+// Public transport interface used by the app. Implemented by Connection
+// (WebSocket), BleBase subclasses (BLE), and MockConnection (demo mode).
 export interface DeviceLink {
   setCallbacks(cb: ConnectionCallbacks): void;
   connect(url: string, token?: string): void;
   disconnect(): void;
   send(msg: OutMsg): boolean;
-  // sottoscrizione a tutti i messaggi in ingresso (per feature che gestiscono
-  // messaggi dedicati, es. macro_data/macro_done); ritorna l'unsubscribe
+  // Subscribe to all incoming messages (e.g. macro_data/macro_done); returns unsubscribe fn
   onMessage?(fn: (msg: InMsg) => void): () => void;
 }
 
@@ -47,7 +46,7 @@ export class Connection {
   private cb: ConnectionCallbacks = {};
   private msgListeners = new Set<(msg: InMsg) => void>();
 
-  // sottoscrizione ai messaggi in ingresso (es. per macro_data/macro_done)
+  // Subscribe to incoming messages (e.g. macro_data/macro_done)
   onMessage(fn: (msg: InMsg) => void): () => void {
     this.msgListeners.add(fn);
     return () => this.msgListeners.delete(fn);
@@ -79,7 +78,7 @@ export class Connection {
     return true;
   }
 
-  // --- interni ---
+  // --- internals ---
 
   private open() {
     this.cleanupSocket();
@@ -118,7 +117,7 @@ export class Connection {
     };
 
     ws.onerror = () => {
-      // onclose seguirà: la gestione è lì
+      // onclose will follow and handle reconnection
     };
   }
 
@@ -145,7 +144,7 @@ export class Connection {
 
   private startHeartbeat() {
     this.stopHeartbeat();
-    // {t:"state"} fa da heartbeat: la risposta aggiorna anche lo stato device
+    // {t:"state"} acts as a heartbeat and also refreshes device status
     this.heartbeatTimer = setInterval(() => this.send({ t: 'state' }), HEARTBEAT_MS);
   }
 

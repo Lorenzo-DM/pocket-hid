@@ -10,13 +10,13 @@ interface Props {
   vibrate: (p?: number | number[]) => void;
 }
 
-// Trackpad mobile-first:
-//  - 1 dito sul pad: movimento relativo (sensibilità da prefs)
-//  - fascia destra dedicata: scroll a 1 dito (uso con una sola mano!)
-//  - tap breve 1 dito: click sx · doppio tap + tieni: drag
-//  - tap breve 2 dita o long-press fermo (>550ms): click dx
-//  - 2 dita trascinamento: scroll
-//  - barra rapida "Scrivi" inline per digitare subito senza cambiare tab
+// Mobile-first trackpad:
+//  - 1 finger on pad: relative movement (sensitivity from prefs)
+//  - right edge rail: 1-finger vertical scroll (one-handed use)
+//  - short 1-finger tap: left click · double tap + hold: drag
+//  - short 2-finger tap or stationary long-press (>550ms): right click
+//  - 2-finger drag: scroll
+//  - inline "Quick type" bar to type immediately without switching tabs
 
 const SCROLL_BASE_DIV = 12;
 const TAP_MAX_MS = 240;
@@ -115,7 +115,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
     flashPad();
   };
 
-  // ---- Eventi area trackpad principale ----
+  // ---- Main trackpad surface events ----
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (pointers.current.size >= 2) return;
@@ -134,7 +134,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
       longPressFired.current = false;
       maxFingers.current = 1;
 
-      // Doppio tap + tieni premuto -> drag & drop con 1 dito
+      // Double tap + hold -> 1-finger drag & drop
       if (e.timeStamp - lastTapTime.current <= DOUBLE_TAP_MS) {
         tapDragActive.current = true;
         conn.send({ t: 'mbtn', b: 0, act: 'd' });
@@ -215,7 +215,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
     }
   };
 
-  // ---- Fascia scroll a 1 dito sul bordo destro ----
+  // ---- 1-finger scroll rail on right edge ----
 
   const onRailDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -243,7 +243,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
     }
   };
 
-  // ---- Pulsanti fisici L / M / R ----
+  // ---- Physical L / M / R buttons ----
 
   const buttonHandlers = (b: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
@@ -265,7 +265,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
-  // ---- Barra rapida testo ----
+  // ---- Quick type bar ----
 
   const sendQuick = (withEnter: boolean) => {
     const payload = prefs.transliterate ? transliterateAscii(quickText) : quickText;

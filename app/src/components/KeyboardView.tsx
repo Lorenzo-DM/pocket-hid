@@ -166,7 +166,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
   const [text, setText] = useState('');
   const [padTab, setPadTab] = useState<PadTab>('nav');
 
-  // Modificatori: 1 tap = one-shot (sticky), doppio tap = bloccato (locked)
+  // Modifiers: 1 tap = one-shot (sticky), double tap = locked
   const [mods, setMods] = useState(0);
   const [lockedMods, setLockedMods] = useState(0);
   const lastModTap = useRef<{ id: number; t: number }>({ id: 0, t: 0 });
@@ -194,7 +194,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
     const activeMods = mods | lockedMods | extraMods;
     conn.send({ t: 'key', code, mods: activeMods, act: 't' });
     vibrate(10);
-    // Rilascia solo i modificatori one-shot (non quelli bloccati)
+    // Release only one-shot modifiers (keep locked ones)
     if (mods !== lockedMods) setMods(lockedMods);
   };
 
@@ -230,7 +230,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
 
   return (
     <div className="keyboard-screen">
-      {/* Sezione tastiera nativa / invio testo */}
+      {/* Native phone keyboard / text input section */}
       <section className="type-card">
         <div className="type-card-head">
           <span className="type-label">Phone keyboard</span>

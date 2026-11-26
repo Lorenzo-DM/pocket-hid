@@ -51,7 +51,7 @@ export function usePrefs() {
       try {
         localStorage.setItem(PREFS_KEY, JSON.stringify(next));
       } catch {
-        // storage non disponibile
+        // storage unavailable
       }
       return next;
     });
@@ -63,7 +63,7 @@ export function usePrefs() {
       try {
         navigator.vibrate?.(pattern);
       } catch {
-        // non supportato (es. Safari iOS)
+        // unsupported (e.g. iOS Safari)
       }
     },
     [prefs.haptics]
@@ -72,7 +72,7 @@ export function usePrefs() {
   return { prefs, updatePref, vibrate };
 }
 
-// Mantiene lo schermo acceso mentre l'app è attiva e connessa
+// Keep screen awake while the app is active and connected
 export function useWakeLock(enabled: boolean) {
   useEffect(() => {
     if (!enabled || !('wakeLock' in navigator)) return;
@@ -85,7 +85,7 @@ export function useWakeLock(enabled: boolean) {
       try {
         sentinel = await navigator.wakeLock.request('screen');
       } catch {
-        // ignorato (batteria scarica o permessi browser)
+        // ignored (low battery or browser permissions)
       }
     };
 
@@ -103,8 +103,8 @@ export function useWakeLock(enabled: boolean) {
   }, [enabled]);
 }
 
-// Mappa caratteri comuni (accenti IT, virgolette tipografiche, trattini) in ASCII
-// finché il firmware supporta solo il keymap US/ASCII.
+// Map common characters (Italian accents, typographic quotes, dashes) to ASCII
+// when the target uses a US/ASCII keymap.
 const CHAR_MAP: Record<string, string> = {
   à: "a'", è: "e'", é: "e'", ì: "i'", ò: "o'", ù: "u'",
   À: "A'", È: "E'", É: "E'", Ì: "I'", Ò: "O'", Ù: "U'",
@@ -123,7 +123,7 @@ export function transliterateAscii(input: string): string {
     } else if (CHAR_MAP[ch]) {
       out += CHAR_MAP[ch];
     }
-    // altri caratteri (es. emoji) vengono saltati
+    // other characters (e.g. emoji) are skipped
   }
   return out;
 }

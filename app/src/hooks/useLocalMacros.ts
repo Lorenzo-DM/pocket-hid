@@ -35,7 +35,7 @@ function makeId(): string {
   return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Converte un nome libero in un ID valido per l'NVS dell'ESP ([a-zA-Z0-9_-]{1,20}). */
+/** Convert a free-form name into a valid ESP NVS ID ([a-zA-Z0-9_-]{1,20}). */
 export function toEspMacroId(name: string): string {
   const cleaned = name
     .normalize('NFD')
@@ -74,7 +74,7 @@ export function parseMacrosJson(rawText: string): { name: string; steps: MacroSt
     return extractMacroList(parsed);
   }
 
-  // Formato 3: singola macro { name?, id?, steps }
+  // Format 3: single macro { name?, id?, steps }
   if (typeof parsed === 'object') {
     return extractMacroList([parsed]);
   }
@@ -142,7 +142,7 @@ function persistMacros(list: LocalMacro[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
-    // storage pieno o non disponibile
+    // storage full or unavailable
   }
 }
 

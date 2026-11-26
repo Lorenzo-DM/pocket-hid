@@ -1,7 +1,6 @@
-// Client BLE su guscio Capacitor (Android), via @capacitor-community/bluetooth-le.
-// Richiede i permessi dichiarati in AndroidManifest.xml (richiesti dal plugin
-// al runtime al primo scan). Il plugin spezza le write oltre l'MTU e il
-// firmware accumula i JSON multi-write, quindi i chunk sono trasparenti.
+// BLE client for Capacitor (Android) via @capacitor-community/bluetooth-le.
+// Requires permissions declared in AndroidManifest.xml (requested at runtime
+// on first scan). Large messages are chunked to MTU-3 and reassembled by firmware.
 
 import {
   BleClient,
@@ -11,7 +10,7 @@ import {
 } from '@capacitor-community/bluetooth-le';
 import { BleBase, BLE_SVC, BLE_RX, BLE_TX } from './ble_base';
 
-// dimensione di write affidabile: MTU 247 negoziato col firmware (247-3)
+// Reliable write chunk size: MTU 247 negotiated with firmware (247 - 3)
 const CHUNK = 244;
 
 export class NativeBleLink extends BleBase {
@@ -27,16 +26,16 @@ export class NativeBleLink extends BleBase {
       if (!this.device) {
         this.device = await BleClient.requestDevice({
           services: [BLE_SVC],
-          // il plugin chiede i permessi runtime al primo requestDevice
+          // Plugin requests runtime permissions on first requestDevice
         });
       }
 
       this.status('authing');
       const id = this.device.deviceId;
-      // onDisconnect: l'ID resta valido per la riconnessione
+      // onDisconnect: deviceId remains valid for reconnection
       await BleClient.connect(id, () => this.onLinkLost());
 
-      // interval rapido per il mouse (high = ~11-15ms)
+      // Fast connection interval for smooth mouse movement (high = ~11-15ms)
       await BleClient.requestConnectionPriority(id, ConnectionPriority.CONNECTION_PRIORITY_HIGH).catch(() => undefined);
 
       await BleClient.startNotifications(id, BLE_SVC, BLE_TX, (value) => {
@@ -62,7 +61,7 @@ export class NativeBleLink extends BleBase {
       return;
     }
 
-    // messaggio grande (es. macro_save): chunk con write affidabile in ordine
+    // Large message (e.g. macro_save): send ordered chunks with reliable writes
     void (async () => {
       try {
         for (let off = 0; off < data.length; off += CHUNK) {

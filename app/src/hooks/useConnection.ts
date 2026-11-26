@@ -51,7 +51,7 @@ function persistTransport(t: Transport) {
       localStorage.setItem(TRANSPORT_KEY, t);
     }
   } catch {
-    // storage non disponibile
+    // storage unavailable
   }
 }
 
@@ -60,7 +60,7 @@ function createLink(t: Transport): DeviceLink {
     case 'demo':
       return new MockConnection();
     case 'ble':
-      // Web Bluetooth su WebView nativo non c'è: usa il plugin Capacitor
+      // Web Bluetooth is unavailable in native WebView: use the Capacitor plugin
       return Capacitor.isNativePlatform() ? new NativeBleLink() : new WebBleLink();
     default:
       return new Connection();
@@ -118,7 +118,7 @@ export function useConnection() {
       onError: (msg) => showToast(msg, 'error'),
     });
 
-    // Auto-connessione trasparente quando la PWA è servita direttamente dall'ESP
+    // Transparent auto-connect when the PWA is served directly from the ESP32
     if (!autoTriedRef.current && transport === 'ws' && isServedByEsp()) {
       autoTriedRef.current = true;
       const savedUrl = localStorage.getItem(URL_KEY) ?? defaultWsUrl();
