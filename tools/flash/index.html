@@ -2,71 +2,293 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PocketHID — Web Flasher</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: #101216; color: #e6e8ec; max-width: 680px; margin: 0 auto; padding: 32px 20px; line-height: 1.55; }
-    h1 { letter-spacing: .5px; }
-    h1 span { color: #4a90d9; }
-    .card { background: #1a1d23; border: 1px solid #30353f; border-radius: 12px; padding: 20px; margin: 18px 0; }
-    ol li, ul li { margin: 8px 0; }
-    code { background: #262a33; padding: 2px 6px; border-radius: 6px; font-size: .9em; }
-    .muted { color: #8b909b; font-size: .9rem; }
-    .warn { color: #d9a441; }
-    esp-web-install-button button {
-      padding: 14px 28px; border: none; border-radius: 10px;
-      background: #4a90d9; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
-    }
-    a { color: #4a90d9; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d11" />
+  <meta name="description" content="PocketHID web suite: flash ESP32-S3 firmware over USB, record macros in Macro Studio, and control devices via Bluetooth LE." />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <title>PocketHID — Flasher, Macro Studio &amp; Remote</title>
+  <link rel="stylesheet" href="./styles.css" />
   <!-- ESP Web Tools (esptool-js): Web Serial requires HTTPS (GitHub Pages works; file:// does not). -->
   <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
 <body>
-  <h1>PocketHID <span>· Web Flasher</span></h1>
-  <p class="muted">
-    One-click USB installation for ESP32-S3 with
-    <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
-    (flashes both the firmware and the built-in PWA — no tools to install).
-    · <a href="./app/"><strong>Open Web App (HTTPS / BLE) →</strong></a>
-    · <a href="./macros.html"><strong>Macro Studio →</strong></a>
-  </p>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#flasher" data-goto-tab="flasher">
+        <img class="brand-icon" src="./icon.svg" width="28" height="28" alt="" />
+        <span>PocketHID</span>
+      </a>
 
-  <div class="card">
-    <esp-web-install-button manifest="./manifest.json" show-log="false">
-      <button slot="activate">Install PocketHID</button>
-      <span slot="unsupported">
-        <p class="warn">Web Serial is not supported by this browser.</p>
-        <p>Use desktop Chrome or Edge (Windows, Linux, macOS). <strong>Safari and iOS are not supported</strong> — for future updates you can use WiFi OTA (<code>http://pockethid.local/update</code>).</p>
+      <nav class="nav-tabs" role="tablist" aria-label="PocketHID workspaces">
+        <button type="button" class="nav-tab active" role="tab" aria-selected="true" aria-controls="panel-flasher" data-tab-btn="flasher">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="7" y="7" width="10" height="10" rx="2" />
+            <path d="M9 7V4M15 7V4M9 20v-3M15 20v-3M7 9H4M7 15H4M20 9h-3M20 15h-3" />
+          </svg>
+          <span>Flasher</span>
+        </button>
+        <button type="button" class="nav-tab" role="tab" aria-selected="false" aria-controls="panel-macros" data-tab-btn="macros">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M7 10h2M11 10h2M15 10h2M8 14h8" />
+          </svg>
+          <span>Macro Studio</span>
+        </button>
+        <button type="button" class="nav-tab" role="tab" aria-selected="false" aria-controls="panel-remote" data-tab-btn="remote">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="3" width="16" height="18" rx="3" />
+            <circle cx="12" cy="11" r="2.2" />
+            <path d="M9 17h6" />
+          </svg>
+          <span>Remote</span>
+        </button>
+      </nav>
+
+      <div class="topbar-meta">
+        <span id="fwVersion" class="version-pill">ESP32-S3</span>
+        <a class="icon-link" href="https://github.com/lorenzo-dm/pocket-hid" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.54 2.87 8.39 6.84 9.75.5.09.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.59.69.49A10.27 10.27 0 0 0 22 12.26C22 6.58 17.52 2 12 2Z" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- =================================================================== -->
+    <!-- Workspace 1: Web Flasher                                            -->
+    <!-- =================================================================== -->
+    <section id="panel-flasher" class="view-panel active" role="tabpanel" data-panel="flasher">
+      <div class="container">
+        <div class="page-head">
+          <h1>Web Flasher</h1>
+          <p>Install the PocketHID firmware and built-in PWA on any ESP32-S3 over USB via <a href="https://esphome.github.io/esp-web-tools/" target="_blank" rel="noopener noreferrer">ESP Web Tools</a>. No local toolchain needed.</p>
+        </div>
+
+        <div class="card">
+          <div class="flash-hero">
+            <div class="flash-hero-copy">
+              <h2>Install on ESP32-S3</h2>
+              <p>Connect your board with a USB-C data cable and start flashing from Chrome or Edge.</p>
+            </div>
+            <div class="flash-action">
+              <esp-web-install-button manifest="./manifest.json" show-log="false">
+                <button slot="activate">Install PocketHID</button>
+                <span slot="unsupported">
+                  <div class="callout warn">
+                    <strong>Web Serial is not supported in this browser.</strong><br />
+                    Use desktop Chrome or Edge (Windows, Linux, macOS). Safari and mobile browsers are not supported — for updates use WiFi OTA at <code>http://pockethid.local/update</code>.
+                  </div>
+                </span>
+                <span slot="not-allowed">
+                  <div class="callout warn">
+                    <strong>HTTPS and serial access required.</strong> Serve this page over HTTPS and allow serial port permissions.
+                  </div>
+                </span>
+              </esp-web-install-button>
+            </div>
+          </div>
+
+          <div class="spec-row" aria-label="Hardware requirements">
+            <span class="spec-chip">ESP32-S3</span>
+            <span class="spec-chip">&ge; 4 MB Flash</span>
+            <span class="spec-chip">USB-C Data Cable</span>
+            <span class="spec-chip">Firmware + LittleFS PWA</span>
+          </div>
+        </div>
+
+        <div class="guide-grid">
+          <div class="card">
+            <h2 class="card-title"><span class="step-num">1</span> Flash over USB</h2>
+            <ol class="guide-list">
+              <li>Connect your ESP32-S3 via USB-C. On <strong>dual-USB</strong> boards use the <strong>UART</strong> port; on <strong>single-USB</strong> boards use the only USB-C port.</li>
+              <li>Click <strong>Install PocketHID</strong> and select the serial port (<code>USB Serial/JTAG</code>, <code>CP210x</code>, or <code>CH340</code>).</li>
+              <li>If flashing does not start on a single-USB board: unplug USB, hold <strong>BOOT</strong>, plug USB back in, release after ~2s, then retry.</li>
+            </ol>
+            <div class="callout warn guide-note">
+              <strong>Single-USB boards:</strong> after flashing finishes, unplug and replug the USB cable without holding BOOT to start the firmware.
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title"><span class="step-num">2</span> Connect &amp; control</h2>
+            <ol class="guide-list">
+              <li>Plug the ESP32-S3's <strong>USB-OTG</strong> port into your target TV, PC, or tablet.</li>
+              <li><strong>Bluetooth (no WiFi needed):</strong> switch to <button type="button" class="btn-inline" data-goto-tab="remote">Remote</button> or use the Android APK, then pair with <code>PocketHID</code>.</li>
+              <li><strong>WiFi / built-in PWA:</strong> join <code>PocketHID-XXXX</code> (password <code>pockethid1</code>), open <code>http://192.168.4.1/portal</code> to save your home WiFi, and after reboot open <code>http://pockethid.local/</code>.</li>
+            </ol>
+            <div class="callout guide-note">
+              Need custom key sequences? Build or record them in <button type="button" class="btn-inline" data-goto-tab="macros">Macro Studio</button> and push directly over BLE.
+            </div>
+          </div>
+        </div>
+
+        <div class="flash-footer">
+          <span>Future firmware updates can be uploaded over WiFi at <code>http://pockethid.local/update</code>.</span>
+          <a href="https://github.com/lorenzo-dm/pocket-hid/releases" target="_blank" rel="noopener noreferrer">Android APK &amp; Releases &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- Workspace 2: Macro Studio                                           -->
+    <!-- =================================================================== -->
+    <section id="panel-macros" class="view-panel" role="tabpanel" data-panel="macros" hidden>
+      <div class="container-studio">
+        <div class="page-head">
+          <h1>Macro Studio</h1>
+          <p>Record keystrokes or assemble step sequences, export JSON for the app, or push directly to your ESP32 over Web Bluetooth.</p>
+        </div>
+
+        <input id="fileInput" type="file" accept=".json,application/json" class="sr-only" />
+
+        <div class="studio-layout">
+          <aside class="card studio-sidebar" aria-label="Macro library">
+            <div class="row between">
+              <h2 class="card-title" style="margin:0">Library</h2>
+              <button id="btnNew" type="button" class="btn btn-primary btn-sm">+ New</button>
+            </div>
+            <div class="row">
+              <button id="btnImport" type="button" class="btn btn-sm" style="flex:1">Import JSON</button>
+              <button id="btnExportAll" type="button" class="btn btn-sm" style="flex:1">Export all</button>
+            </div>
+
+            <ul id="macroList" class="macro-list"></ul>
+
+            <div>
+              <div class="section-label" style="margin-top:4px">Presets</div>
+              <div id="presetList" class="preset-wrap"></div>
+            </div>
+          </aside>
+
+          <div class="card">
+            <div class="row between" style="margin-bottom:14px">
+              <h2 id="editorTitle" class="card-title" style="margin:0">New macro</h2>
+              <button id="btnDeleteMacro" type="button" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+
+            <label class="field-label" for="macroName">Macro name</label>
+            <input id="macroName" class="input" type="text" maxlength="60" placeholder="e.g. Linux: Terminal + top" />
+
+            <div id="recBox" class="rec-box">
+              <div class="row between">
+                <button id="btnRec" type="button" class="btn">
+                  <span class="rec-dot" aria-hidden="true"></span>
+                  <span id="btnRecLabel">Record from keyboard</span>
+                </button>
+                <label class="check-label">
+                  <input id="chkRecWaits" type="checkbox" checked />
+                  <span>Record pauses (&gt;400 ms)</span>
+                </label>
+              </div>
+              <p class="rec-hint">
+                Printable characters group into <code>TEXT</code> steps; special keys and shortcuts into <code>KEY</code> steps. For OS-intercepted shortcuts (<code>Ctrl+Alt+T</code>, <code>Win</code>), use Quick keys below.
+              </p>
+            </div>
+
+            <div class="section-label">Quick keys</div>
+            <div id="quickSteps" class="row"></div>
+
+            <div class="section-label">Add step manually</div>
+            <div class="builder-row">
+              <select id="stepKind" class="select" aria-label="Step type">
+                <option value="text">Text</option>
+                <option value="key">Key / Shortcut</option>
+                <option value="wait">Wait (ms)</option>
+                <option value="media">Media</option>
+              </select>
+              <div id="builderInputs" class="builder-inputs"></div>
+              <button id="btnAddStep" type="button" class="btn btn-sm">+ Add</button>
+            </div>
+
+            <div class="row between" style="margin-top:20px">
+              <div class="section-label" style="margin:0">Steps (<span id="stepCount">0</span>)</div>
+              <button id="btnClearSteps" type="button" class="btn btn-danger btn-sm">Clear all</button>
+            </div>
+            <ol id="stepList" class="steps"></ol>
+
+            <div class="studio-actions">
+              <button id="btnExportOne" type="button" class="btn btn-primary">Download JSON</button>
+              <button id="btnCopyJson" type="button" class="btn">Copy JSON</button>
+              <button id="btnBlePush" type="button" class="btn" title="Send directly to ESP32 NVS over Web Bluetooth (Chrome/Edge)">Send to ESP (BLE)</button>
+            </div>
+            <div id="statusBar" class="status-bar" role="status" aria-live="polite"></div>
+
+            <details class="json-details">
+              <summary>JSON Preview</summary>
+              <pre id="jsonPreview"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- Workspace 3: Remote (Hosted Web App)                                -->
+    <!-- =================================================================== -->
+    <section id="panel-remote" class="view-panel panel-remote" role="tabpanel" data-panel="remote" hidden>
+      <div class="remote-bar">
+        <div class="remote-bar-left">
+          <span class="remote-bar-dot" aria-hidden="true"></span>
+          <span>PocketHID Remote &middot; Bluetooth LE &amp; Demo</span>
+        </div>
+        <a class="remote-bar-link" href="./app/" target="_blank" rel="noopener noreferrer">
+          <span>Full screen / PWA</span>
+          <span aria-hidden="true">&nearr;</span>
+        </a>
+      </div>
+
+      <div class="remote-stage">
+        <iframe
+          id="remoteFrame"
+          class="remote-frame"
+          title="PocketHID Remote Web App"
+          allow="bluetooth *; clipboard-read; clipboard-write; fullscreen"
+        ></iframe>
+
+        <div id="remoteFallback" class="remote-fallback">
+          <div class="card remote-fallback-card">
+            <h2>Remote Web App not bundled here</h2>
+            <p>The hosted PWA bundle (<code>./app/</code>) is assembled automatically during GitHub Pages deployment. For local preview, copy <code>app/dist</code> into <code>tools/flash/app</code>.</p>
+            <a class="btn btn-primary" href="./app/">Try opening ./app/ directly</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" role="tablist" aria-label="PocketHID workspaces">
+    <button type="button" class="bnav-btn active" role="tab" aria-selected="true" aria-controls="panel-flasher" data-tab-btn="flasher">
+      <span class="bnav-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="7" y="7" width="10" height="10" rx="2" />
+          <path d="M9 7V4M15 7V4M9 20v-3M15 20v-3M7 9H4M7 15H4M20 9h-3M20 15h-3" />
+        </svg>
       </span>
-      <span slot="not-allowed">
-        <p class="warn">This page must be served over HTTPS and serial access must be allowed.</p>
+      <span class="bnav-label">Flasher</span>
+    </button>
+    <button type="button" class="bnav-btn" role="tab" aria-selected="false" aria-controls="panel-macros" data-tab-btn="macros">
+      <span class="bnav-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M7 10h2M11 10h2M15 10h2M8 14h8" />
+        </svg>
       </span>
-    </esp-web-install-button>
-  </div>
+      <span class="bnav-label">Macros</span>
+    </button>
+    <button type="button" class="bnav-btn" role="tab" aria-selected="false" aria-controls="panel-remote" data-tab-btn="remote">
+      <span class="bnav-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="3" width="16" height="18" rx="3" />
+          <circle cx="12" cy="11" r="2.2" />
+          <path d="M9 17h6" />
+        </svg>
+      </span>
+      <span class="bnav-label">Remote</span>
+    </button>
+  </nav>
 
-  <div class="card">
-    <h2>1. Flash the ESP32-S3</h2>
-    <ol>
-      <li>Connect your ESP32-S3 via USB-C. On <strong>dual-USB</strong> boards use the <strong>UART</strong> port; on <strong>single-USB</strong> boards (direct OTG) use the only USB-C port.</li>
-      <li>Click <strong>Install PocketHID</strong> and select the serial port (e.g. <code>USB Serial/JTAG</code> or <code>CP210x</code>/<code>CH340</code>).</li>
-      <li>If flashing doesn't start automatically on a single-USB board: unplug USB, <strong>hold BOOT</strong>, plug USB back in, release BOOT after ~2s, then retry.</li>
-      <li><strong class="warn">After flashing (single-USB boards):</strong> unplug and replug the USB cable without holding BOOT to start the firmware.</li>
-    </ol>
-  </div>
-
-  <div class="card">
-    <h2>2. First-time setup</h2>
-    <ol>
-      <li>Plug the ESP32-S3's <strong>USB-OTG</strong> port into your target TV or PC.</li>
-      <li><strong>Bluetooth (no WiFi needed):</strong> open the <a href="./app/">hosted HTTPS Web App</a> (installable as a PWA in Chrome/Edge) or the Android APK, and pair with <code>PocketHID</code>.</li>
-      <li><strong>WiFi / built-in PWA:</strong> connect your phone to the WiFi hotspot <code>PocketHID-XXXX</code> (default password: <code>pockethid1</code>), open <code>http://192.168.4.1/portal</code> to enter your home WiFi credentials, and after reboot open <code>http://pockethid.local/</code>.</li>
-    </ol>
-  </div>
-
-  <p class="muted">
-    Compatible with any ESP32-S3 board with &ge; 4 MB flash. Subsequent updates can be uploaded over WiFi at <code>http://pockethid.local/update</code>.
-  </p>
+  <script src="./app.js" defer></script>
 </body>
 </html>
