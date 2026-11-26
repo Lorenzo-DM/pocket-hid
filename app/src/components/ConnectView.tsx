@@ -37,6 +37,7 @@ export function ConnectView({
 
   const busy = status === 'connecting' || status === 'authing' || status === 'reconnecting';
   const bleBlocked = transport === 'ble' && !Capacitor.isNativePlatform() && !window.isSecureContext;
+  const wsBlocked = transport === 'ws' && !Capacitor.isNativePlatform() && location.protocol === 'https:';
 
   const doConnect = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -55,13 +56,13 @@ export function ConnectView({
 
   const connectLabel = busy
     ? status === 'authing'
-      ? 'Autenticazione…'
-      : 'Connessione…'
+      ? 'Authenticating…'
+      : 'Connecting…'
     : transport === 'demo'
-      ? 'Avvia modalità Demo'
+      ? 'Start Demo mode'
       : transport === 'ble'
-        ? 'Seleziona dispositivo BLE'
-        : 'Connetti';
+        ? 'Select BLE device'
+        : 'Connect';
 
   return (
     <div className="connect-wrap">
@@ -75,11 +76,11 @@ export function ConnectView({
           </div>
           <div>
             <h1>PocketHID</h1>
-            <p className="muted">Mouse, tastiera e macro per PC, TV e ogni dispositivo USB</p>
+            <p className="muted">Mouse, keyboard &amp; macros for PC, TV, and any USB device</p>
           </div>
         </div>
 
-        <div className="segmented" role="tablist" aria-label="Canale di connessione">
+        <div className="segmented" role="tablist" aria-label="Connection transport">
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -97,15 +98,21 @@ export function ConnectView({
           ))}
         </div>
 
-        {transport === 'ws' && (
+        {transport === 'ws' && wsBlocked && (
+          <div className="callout warn">
+            <strong>WiFi WebSocket is blocked on HTTPS pages.</strong> Use <strong>Bluetooth</strong> here, or open <code>http://pockethid.local/</code> (or the Android app) for WiFi.
+          </div>
+        )}
+
+        {transport === 'ws' && !wsBlocked && (
           <details className="advanced-box" open={!servedByEsp || Boolean(statusDetail)}>
             <summary>
-              <span>Destinazione WiFi</span>
+              <span>WiFi target</span>
               <span className="summary-val">{url.replace(/^ws:\/\//, '').replace(/\/ws$/, '')}</span>
             </summary>
             <div className="advanced-fields">
               <label className="field">
-                <span>Indirizzo WebSocket ESP32</span>
+                <span>ESP32 WebSocket URL</span>
                 <input
                   type="text"
                   value={url}
@@ -119,13 +126,13 @@ export function ConnectView({
 
               <label className="field">
                 <span>
-                  Token <small className="muted">(opzionale)</small>
+                  Token <small className="muted">(optional)</small>
                 </span>
                 <input
                   type="password"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
-                  placeholder="vuoto = nessuna auth"
+                  placeholder="empty = no auth"
                   autoComplete="off"
                 />
               </label>
@@ -137,11 +144,11 @@ export function ConnectView({
           <div className={`callout ${bleBlocked ? 'warn' : ''}`}>
             {bleBlocked ? (
               <>
-                <strong>Web Bluetooth richiede HTTPS.</strong> Da pagina servita dall&apos;ESP in HTTP usa il canale <strong>WiFi</strong> oppure l&apos;app Android.
+                <strong>Web Bluetooth requires HTTPS.</strong> From a page served over HTTP by the ESP32, use <strong>WiFi</strong>, the hosted HTTPS PWA, or the Android app.
               </>
             ) : (
               <>
-                Seleziona <strong>PocketHID</strong> nella finestra Bluetooth del dispositivo. Al primo utilizzo conferma il pairing.
+                Select <strong>PocketHID</strong> in the Bluetooth picker. On first connection, confirm the pairing prompt.
               </>
             )}
           </div>
@@ -149,12 +156,12 @@ export function ConnectView({
 
         {transport === 'demo' && (
           <div className="callout">
-            Modalità simulata senza hardware: testa trackpad, telecomando, tastiera e macro con log dei pacchetti in tempo reale.
+            Simulated mode without hardware: test trackpad, remote, keyboard, and macros with a live packet log.
           </div>
         )}
 
         <div className="connect-actions">
-          <button type="submit" className="btn-primary full" disabled={busy || bleBlocked}>
+          <button type="submit" className="btn-primary full" disabled={busy || bleBlocked || wsBlocked}>
             {connectLabel}
           </button>
           {busy && (
@@ -163,16 +170,16 @@ export function ConnectView({
               className="btn-secondary full"
               onClick={() => conn.disconnect()}
             >
-              Annulla
+              Cancel
             </button>
           )}
         </div>
 
         {statusDetail && <p className="callout error">{statusDetail}</p>}
 
-        {transport === 'ws' && (
+        {transport === 'ws' && !wsBlocked && (
           <p className="hint-sm">
-            Collega il telefono alla stessa WiFi dell&apos;ESP32 o al suo hotspot <code>PocketHID</code>.
+            Connect your phone to the same WiFi as the ESP32 or to its <code>PocketHID</code> hotspot.
           </p>
         )}
       </form>

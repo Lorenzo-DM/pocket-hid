@@ -50,8 +50,8 @@ export function SettingsModal({
     >
       <div className="modal-sheet">
         <div className="modal-head">
-          <h2>Impostazioni</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Chiudi">
+          <h2>Settings</h2>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <IconClose size={20} />
           </button>
         </div>
@@ -59,7 +59,7 @@ export function SettingsModal({
         <div className="modal-body">
           {device && (
             <section className="settings-group">
-              <h3>Dispositivo</h3>
+              <h3>Device</h3>
               <div className="info-grid">
                 <div className="info-chip">
                   <span className="info-k">Firmware</span>
@@ -68,7 +68,7 @@ export function SettingsModal({
                 <div className="info-chip">
                   <span className="info-k">USB HID</span>
                   <span className={`info-v ${device.usb === 'mounted' ? 'ok' : 'bad'}`}>
-                    {device.usb === 'mounted' ? 'Connessa' : 'Assente'}
+                    {device.usb === 'mounted' ? 'Connected' : 'Unmounted'}
                   </span>
                 </div>
                 <div className="info-chip">
@@ -76,7 +76,7 @@ export function SettingsModal({
                   <span className="info-v">{device.layout.toUpperCase()}</span>
                 </div>
                 <div className="info-chip">
-                  <span className="info-k">Canale</span>
+                  <span className="info-k">Transport</span>
                   <span className="info-v">{transport.toUpperCase()}</span>
                 </div>
               </div>
@@ -87,7 +87,7 @@ export function SettingsModal({
             <h3>Trackpad</h3>
             <label className="range-row">
               <div className="range-head">
-                <span>Sensibilità cursore</span>
+                <span>Pointer sensitivity</span>
                 <span className="range-val">{prefs.sensitivity.toFixed(1)}×</span>
               </div>
               <input
@@ -102,7 +102,7 @@ export function SettingsModal({
 
             <label className="range-row">
               <div className="range-head">
-                <span>Velocità scroll</span>
+                <span>Scroll speed</span>
                 <span className="range-val">{prefs.scrollSpeed.toFixed(1)}×</span>
               </div>
               <input
@@ -117,8 +117,8 @@ export function SettingsModal({
 
             <label className="toggle-row">
               <span>
-                Scroll naturale
-                <small>Sposta il contenuto nella direzione del dito</small>
+                Natural scrolling
+                <small>Moves content in the direction of your finger</small>
               </span>
               <input
                 type="checkbox"
@@ -130,13 +130,13 @@ export function SettingsModal({
           </section>
 
           <section className="settings-group">
-            <h3>Tastiera PC</h3>
+            <h3>Target Keyboard</h3>
             <div className="range-row">
               <div className="range-head">
-                <span>Layout tastiera del PC</span>
+                <span>Target PC keyboard layout</span>
                 <span className="range-val">{(device?.layout ?? 'us').toUpperCase()}</span>
               </div>
-              <div className="segmented compact" role="tablist" aria-label="Layout tastiera">
+              <div className="segmented compact" role="tablist" aria-label="Keyboard layout">
                 <button
                   type="button"
                   role="tab"
@@ -144,7 +144,7 @@ export function SettingsModal({
                   className={`seg-btn ${device?.layout === 'it' ? 'active' : ''}`}
                   onClick={() => onSetLayout('it')}
                 >
-                  Italiano (IT)
+                  Italian (IT)
                 </button>
                 <button
                   type="button"
@@ -153,7 +153,7 @@ export function SettingsModal({
                   className={`seg-btn ${(device?.layout ?? 'us') !== 'it' ? 'active' : ''}`}
                   onClick={() => onSetLayout('us')}
                 >
-                  Inglese (US)
+                  English (US)
                 </button>
               </div>
             </div>
@@ -161,8 +161,8 @@ export function SettingsModal({
             {device?.layout !== 'it' && (
               <label className="toggle-row">
                 <span>
-                  Adatta caratteri accentati
-                  <small>Su layout US converte à, è, ò… in ASCII (a&apos;, e&apos;, o&apos;)</small>
+                  Transliterate accented characters
+                  <small>On US layout converts à, è, ò… to ASCII (a&apos;, e&apos;, o&apos;)</small>
                 </span>
                 <input
                   type="checkbox"
@@ -175,11 +175,11 @@ export function SettingsModal({
           </section>
 
           <section className="settings-group">
-            <h3>Esperienza</h3>
+            <h3>Experience</h3>
             <label className="toggle-row">
               <span>
-                Feedback aptico
-                <small>Leggera vibrazione su click e tasti (se supportato)</small>
+                Haptic feedback
+                <small>Subtle vibration on clicks and keys (if supported)</small>
               </span>
               <input
                 type="checkbox"
@@ -191,8 +191,8 @@ export function SettingsModal({
 
             <label className="toggle-row">
               <span>
-                Tieni schermo acceso
-                <small>Evita lo standby mentre usi il telecomando</small>
+                Keep screen awake
+                <small>Prevents screen sleep while using the remote</small>
               </span>
               <input
                 type="checkbox"
@@ -205,13 +205,13 @@ export function SettingsModal({
 
           {showEspLinks && (
             <section className="settings-group">
-              <h3>Strumenti ESP32</h3>
+              <h3>ESP32 Tools</h3>
               <div className="esp-links">
                 <a className="btn-secondary" href="/portal">
-                  Configura WiFi
+                  WiFi Setup
                 </a>
                 <a className="btn-secondary" href="/update">
-                  Aggiorna OTA
+                  OTA Update
                 </a>
               </div>
             </section>
@@ -228,7 +228,7 @@ export function SettingsModal({
             }}
           >
             <IconPower size={18} />
-            <span>Disconnetti</span>
+            <span>Disconnect</span>
           </button>
         </div>
       </div>

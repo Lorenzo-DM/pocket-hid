@@ -49,10 +49,10 @@ export function toEspMacroId(name: string): string {
 
 export function validateForEsp(name: string, steps: MacroStep[]): { ok: true; espId: string } | { ok: false; reason: string } {
   const espId = toEspMacroId(name);
-  if (steps.length === 0) return { ok: false, reason: 'La macro non ha step.' };
-  if (steps.length > 64) return { ok: false, reason: `Troppi step per l'ESP (${steps.length}/64).` };
+  if (steps.length === 0) return { ok: false, reason: 'Macro has no steps.' };
+  if (steps.length > 64) return { ok: false, reason: `Too many steps for ESP (${steps.length}/64).` };
   const blob = JSON.stringify(steps);
-  if (blob.length > 2048) return { ok: false, reason: `Macro troppo grande per l'ESP (${blob.length}/2048 byte).` };
+  if (blob.length > 2048) return { ok: false, reason: `Macro too large for ESP (${blob.length}/2048 bytes).` };
   return { ok: true, espId };
 }
 
@@ -60,16 +60,16 @@ export function parseMacrosJson(rawText: string): { name: string; steps: MacroSt
   const parsed: unknown = JSON.parse(rawText);
   if (!parsed) return [];
 
-  // Formato 1: { macros: [...] }
+  // Format 1: { macros: [...] }
   if (typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray((parsed as Record<string, unknown>).macros)) {
     return extractMacroList((parsed as Record<string, unknown>).macros as unknown[]);
   }
 
-  // Formato 2: array di macro [{ name, steps }] oppure array diretto di step [{ k/s/c/w }]
+  // Format 2: array of macros [{ name, steps }] or direct array of steps [{ k/s/c/w }]
   if (Array.isArray(parsed)) {
     if (parsed.length > 0 && isLikelyStep(parsed[0])) {
       const steps = sanitizeSteps(parsed);
-      return steps.length > 0 ? [{ name: 'Macro importata', steps }] : [];
+      return steps.length > 0 ? [{ name: 'Imported macro', steps }] : [];
     }
     return extractMacroList(parsed);
   }

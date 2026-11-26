@@ -12,7 +12,7 @@ const fakeDevice: DeviceInfo = {
   fw: '0.3.0-demo',
   layout: 'us',
   usb: 'mounted',
-  macros: ['youtube', 'copia-url'],
+  macros: ['youtube', 'copy-url'],
 };
 
 export class MockConnection implements DeviceLink {
@@ -22,7 +22,7 @@ export class MockConnection implements DeviceLink {
   private device: DeviceInfo = { ...fakeDevice, macros: [...fakeDevice.macros] };
   private macroSteps = new Map<string, MacroStep[]>([
     ['youtube', [{ s: 'youtube.com' }, { k: 0x28 }]],
-    ['copia-url', [{ k: 0x0f, m: 1 }, { w: 100 }, { k: 0x06, m: 1 }]],
+    ['copy-url', [{ k: 0x0f, m: 1 }, { w: 100 }, { k: 0x06, m: 1 }]],
   ]);
   private runningMacro: string | null = null;
   private msgListeners = new Set<(msg: InMsg) => void>();
@@ -81,7 +81,7 @@ export class MockConnection implements DeviceLink {
 
       case 'layout':
         this.device = { ...this.device, layout: msg.layout };
-        debugLog('info', `demo: layout impostato su ${msg.layout}`);
+        debugLog('info', `demo: layout set to ${msg.layout}`);
         this.later(30, () => {
           if (this.closed) return;
           this.emit({ t: 'state', ...this.device });
@@ -91,7 +91,7 @@ export class MockConnection implements DeviceLink {
 
       case 'macro_save':
         if (!this.device.macros.includes(msg.id) && this.device.macros.length >= 12) {
-          this.later(30, () => this.cb.onError?.('demo: limite macro raggiunto'));
+          this.later(30, () => this.cb.onError?.('demo: macro limit reached'));
           break;
         }
         this.macroSteps.set(msg.id, msg.steps);
@@ -101,7 +101,7 @@ export class MockConnection implements DeviceLink {
             ? this.device.macros
             : [...this.device.macros, msg.id],
         };
-        debugLog('info', `demo: macro "${msg.id}" salvata (${msg.steps.length} step)`);
+        debugLog('info', `demo: macro "${msg.id}" saved (${msg.steps.length} steps)`);
         this.later(30, () => {
           if (this.closed) return;
           this.emit({ t: 'state', ...this.device });
@@ -124,11 +124,11 @@ export class MockConnection implements DeviceLink {
 
       case 'macro_run':
         if (this.runningMacro) {
-          this.later(30, () => this.cb.onError?.('demo: macro già in esecuzione'));
+          this.later(30, () => this.cb.onError?.('demo: macro already running'));
           break;
         }
         this.runningMacro = msg.id;
-        debugLog('info', `demo: esecuzione macro "${msg.id}"…`);
+        debugLog('info', `demo: running macro "${msg.id}"…`);
         this.later(700, () => {
           this.runningMacro = null;
           if (this.closed) return;

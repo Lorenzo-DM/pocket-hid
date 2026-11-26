@@ -15,9 +15,9 @@ type Tab = 'trackpad' | 'remote' | 'keyboard' | 'macro';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'trackpad', label: 'Trackpad' },
-  { id: 'remote', label: 'Telecomando' },
-  { id: 'keyboard', label: 'Tastiera' },
-  { id: 'macro', label: 'Macro' },
+  { id: 'remote', label: 'Remote' },
+  { id: 'keyboard', label: 'Keyboard' },
+  { id: 'macro', label: 'Macros' },
 ];
 
 export default function App() {
@@ -90,7 +90,7 @@ export default function App() {
             )}
           </main>
 
-          <nav className="bottom-nav" aria-label="Sezioni">
+          <nav className="bottom-nav" aria-label="Navigation">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -122,7 +122,7 @@ export default function App() {
             onSetLayout={(layout) => {
               conn.send({ t: 'layout', layout });
               vibrate(8);
-              showToast(`Layout tastiera impostato su ${layout.toUpperCase()}`);
+              showToast(`Keyboard layout set to ${layout.toUpperCase()}`);
             }}
             onClose={() => setSettingsOpen(false)}
             onDisconnect={disconnect}

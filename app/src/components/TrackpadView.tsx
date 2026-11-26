@@ -296,7 +296,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
             type="text"
             value={quickText}
             onChange={(e) => setQuickText(e.target.value)}
-            placeholder="Scrivi testo rapido…"
+            placeholder="Quick type…"
             autoComplete="off"
           />
           <button
@@ -316,16 +316,16 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
             className="qt-btn"
             disabled={!quickText}
             onClick={() => sendQuick(false)}
-            aria-label="Invia testo"
-            title="Invia"
+            aria-label="Send text"
+            title="Send"
           >
             <IconSend size={17} />
           </button>
           <button
             type="submit"
             className="qt-btn primary"
-            aria-label="Invia e premi Invio"
-            title="Invia + Invio"
+            aria-label="Send and press Enter"
+            title="Send + Enter"
           >
             <IconReturn size={18} />
           </button>
@@ -333,7 +333,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
             type="button"
             className="qt-btn ghost"
             onClick={() => setQuickOpen(false)}
-            aria-label="Chiudi scrittura rapida"
+            aria-label="Close quick type"
           >
             <IconClose size={18} />
           </button>
@@ -346,7 +346,7 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
             onClick={() => setQuickOpen(true)}
           >
             <IconKeyboard size={16} />
-            <span>Scrivi testo rapido…</span>
+            <span>Quick type…</span>
           </button>
         </div>
       )}
@@ -363,15 +363,15 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
         >
           <span className="pad-hint">
             {padFeedback === 'drag'
-              ? 'Trascinamento attivo'
-              : 'Tap: sx · 2 dita/lungo: dx · 2× tap: drag'}
+              ? 'Dragging'
+              : 'Tap: left · 2-finger/hold: right · 2× tap: drag'}
           </span>
         </div>
 
         <div
           ref={railRef}
           className="scroll-rail"
-          aria-label="Barra di scorrimento"
+          aria-label="Scroll bar"
           onPointerDown={onRailDown}
           onPointerMove={onRailMove}
           onPointerUp={onRailUp}
@@ -384,19 +384,19 @@ export function TrackpadView({ conn, prefs, vibrate }: Props) {
 
       <div className="pad-buttons">
         <button type="button" className="pad-btn" {...buttonHandlers(0)}>
-          Click sx
+          Left click
         </button>
         <button
           type="button"
           className="pad-btn middle"
-          aria-label="Click centrale"
-          title="Click centrale"
+          aria-label="Middle click"
+          title="Middle click"
           {...buttonHandlers(2)}
         >
           •
         </button>
         <button type="button" className="pad-btn" {...buttonHandlers(1)}>
-          Click dx
+          Right click
         </button>
       </div>
     </div>

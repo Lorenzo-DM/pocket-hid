@@ -89,7 +89,7 @@ export class Connection {
     try {
       ws = new WebSocket(this.url);
     } catch (e) {
-      this.cb.onStatus?.('error', `URL non valido: ${String(e)}`);
+      this.cb.onStatus?.('error', `Invalid URL: ${String(e)}`);
       return;
     }
     this.ws = ws;
@@ -99,7 +99,7 @@ export class Connection {
       ws.send(serialize({ t: 'hello', v: 1, token: this.token }));
       this.helloTimer = setTimeout(() => {
         if (this.ws !== ws) return;
-        this.cb.onStatus?.('error', 'Nessuna risposta all\'handshake (hello)');
+        this.cb.onStatus?.('error', 'No handshake response (hello)');
         this.scheduleReconnect();
       }, HELLO_TIMEOUT_MS);
     };

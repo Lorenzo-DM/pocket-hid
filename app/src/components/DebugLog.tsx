@@ -14,12 +14,12 @@ export function DebugLog({ aboveNav = false }: { aboveNav?: boolean }) {
       {open && (
         <div className="debuglog-panel">
           <div className="debuglog-head">
-            <span>Log messaggi ({lines.length})</span>
+            <span>Message log ({lines.length})</span>
             <button type="button" className="link" onClick={clearDebugLog}>
-              svuota
+              clear
             </button>
           </div>
-          {visible.length === 0 && <div className="muted">nessun messaggio</div>}
+          {visible.length === 0 && <div className="muted">no messages</div>}
           {visible.map((l, i) => (
             <div key={i} className={`debuglog-line ${l.dir}`}>
               <span className="debuglog-time">{l.time}</span>
@@ -33,8 +33,8 @@ export function DebugLog({ aboveNav = false }: { aboveNav?: boolean }) {
         type="button"
         className={`debuglog-toggle ${open ? 'active' : ''}`}
         onClick={() => setOpen(!open)}
-        aria-label="Log messaggi debug"
-        title="Log messaggi (modalità debug)"
+        aria-label="Debug message log"
+        title="Message log (debug mode)"
       >
         <IconBug size={18} />
       </button>

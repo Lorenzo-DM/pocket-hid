@@ -18,7 +18,7 @@ export class WebBleLink extends BleBase {
 
     if (!navigator.bluetooth) {
       this.handleError(
-        'Web Bluetooth non disponibile: usa Chrome/Edge (desktop o Android); su iOS/Android usa la app nativa.'
+        'Web Bluetooth unavailable: use Chrome/Edge (desktop or Android), or the native Android app.'
       );
       return;
     }
@@ -34,7 +34,7 @@ export class WebBleLink extends BleBase {
           this.onLinkLost();
         });
       }
-      if (!this.device.gatt) throw new Error('GATT non disponibile');
+      if (!this.device.gatt) throw new Error('GATT unavailable');
 
       this.status('authing');
       const server = await this.device.gatt.connect();
@@ -61,7 +61,7 @@ export class WebBleLink extends BleBase {
     if (urgent && ch.properties.writeWithoutResponse && data.length <= FAST_WRITE_MAX) {
       ch.writeValueWithoutResponse?.(data).catch(() => undefined);
     } else if (ch.properties.write) {
-      ch.writeValueWithResponse?.(data).catch(() => this.cb.onError?.('write BLE non riuscito'));
+      ch.writeValueWithResponse?.(data).catch(() => this.cb.onError?.('BLE write failed'));
     } else {
       ch.writeValue(data).catch(() => undefined);
     }

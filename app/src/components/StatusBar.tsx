@@ -39,15 +39,15 @@ export function StatusBar({ status, device, transport, onOpenSettings, onDisconn
       <div className="status-center">
         {isReconnecting && (
           <span className="status-pill warn">
-            Riconnessione…
+            Reconnecting…
             <button type="button" className="status-pill-action" onClick={onDisconnect}>
-              Annulla
+              Cancel
             </button>
           </span>
         )}
         {!isReconnecting && usbMissing && (
-          <span className="status-pill bad" title="Collega l'ESP32 al PC o alla TV via USB">
-            USB non rilevata
+          <span className="status-pill bad" title="Plug the ESP32 into your PC or TV via USB">
+            USB not detected
           </span>
         )}
         {!isReconnecting && !usbMissing && device && (
@@ -59,8 +59,8 @@ export function StatusBar({ status, device, transport, onOpenSettings, onDisconn
         type="button"
         className="icon-btn"
         onClick={onOpenSettings}
-        aria-label="Impostazioni e stato dispositivo"
-        title="Impostazioni"
+        aria-label="Settings and device status"
+        title="Settings"
       >
         <IconSettings size={20} />
       </button>

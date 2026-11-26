@@ -95,13 +95,13 @@ export function MediaView({ conn, vibrate }: Props) {
 
   return (
     <div className="remote">
-      {/* Riga superiore: Luminosità e Power (protetto) */}
+      {/* Top row: Brightness and Power (double-tap protected) */}
       <div className="remote-top">
-        <div className="pill-group" aria-label="Luminosità">
+        <div className="pill-group" aria-label="Brightness">
           <button
             type="button"
             className="pill-btn"
-            aria-label="Riduci luminosità"
+            aria-label="Decrease brightness"
             {...holdAction(() => sendConsumer(CONSUMER.BRIGHTNESS_DOWN), MEDIA_REPEAT_MS)}
           >
             <IconSun size={16} />
@@ -110,7 +110,7 @@ export function MediaView({ conn, vibrate }: Props) {
           <button
             type="button"
             className="pill-btn"
-            aria-label="Aumenta luminosità"
+            aria-label="Increase brightness"
             {...holdAction(() => sendConsumer(CONSUMER.BRIGHTNESS_UP), MEDIA_REPEAT_MS)}
           >
             <IconSun size={16} />
@@ -125,17 +125,17 @@ export function MediaView({ conn, vibrate }: Props) {
           aria-label="Power"
         >
           <IconPower size={17} />
-          <span>{powerArmed ? 'Conferma?' : 'Power'}</span>
+          <span>{powerArmed ? 'Confirm?' : 'Power'}</span>
         </button>
       </div>
 
-      {/* Centro: D-Pad + Navigazione rapida */}
+      {/* Center: D-Pad + quick navigation */}
       <div className="dpad-section">
-        <div className="dpad-grid" role="group" aria-label="Controlli direzionali">
+        <div className="dpad-grid" role="group" aria-label="Directional controls">
           <button
             type="button"
             className="dpad-btn up"
-            aria-label="Su"
+            aria-label="Up"
             {...holdAction(() => sendKey(K.UP))}
           >
             <IconChevron dir="up" size={26} />
@@ -144,7 +144,7 @@ export function MediaView({ conn, vibrate }: Props) {
           <button
             type="button"
             className="dpad-btn left"
-            aria-label="Sinistra"
+            aria-label="Left"
             {...holdAction(() => sendKey(K.LEFT))}
           >
             <IconChevron dir="left" size={26} />
@@ -154,7 +154,7 @@ export function MediaView({ conn, vibrate }: Props) {
             type="button"
             className="dpad-ok"
             onClick={() => tapKey(K.ENTER)}
-            aria-label="OK / Invio"
+            aria-label="OK / Enter"
           >
             OK
           </button>
@@ -162,7 +162,7 @@ export function MediaView({ conn, vibrate }: Props) {
           <button
             type="button"
             className="dpad-btn right"
-            aria-label="Destra"
+            aria-label="Right"
             {...holdAction(() => sendKey(K.RIGHT))}
           >
             <IconChevron dir="right" size={26} />
@@ -171,7 +171,7 @@ export function MediaView({ conn, vibrate }: Props) {
           <button
             type="button"
             className="dpad-btn down"
-            aria-label="Giù"
+            aria-label="Down"
             {...holdAction(() => sendKey(K.DOWN))}
           >
             <IconChevron dir="down" size={26} />
@@ -197,7 +197,7 @@ export function MediaView({ conn, vibrate }: Props) {
               conn.send({ t: 'key', code: 0, mods: MOD.GUI, act: 't' });
               vibrate(10);
             }}
-            aria-label="Tasto Windows / Start"
+            aria-label="Windows / Start key"
             title="Start / Launcher"
           >
             ⊞ Win
@@ -206,17 +206,17 @@ export function MediaView({ conn, vibrate }: Props) {
             Home
           </button>
           <button type="button" className="remote-chip" onClick={() => tapKey(K.SPACE)}>
-            Spazio
+            Space
           </button>
         </div>
       </div>
 
-      {/* Controlli Volume */}
+      {/* Volume controls */}
       <div className="remote-row" role="group" aria-label="Volume">
         <button
           type="button"
           className="remote-btn"
-          aria-label="Abbassa volume"
+          aria-label="Volume down"
           {...holdAction(() => sendConsumer(CONSUMER.VOLUME_DOWN), MEDIA_REPEAT_MS)}
         >
           <IconVolumeDown size={20} />
@@ -225,7 +225,7 @@ export function MediaView({ conn, vibrate }: Props) {
         <button
           type="button"
           className="remote-btn compact"
-          aria-label="Muto"
+          aria-label="Mute"
           onClick={() => tapConsumer(CONSUMER.MUTE)}
         >
           <IconVolumeMute size={20} />
@@ -233,7 +233,7 @@ export function MediaView({ conn, vibrate }: Props) {
         <button
           type="button"
           className="remote-btn"
-          aria-label="Alza volume"
+          aria-label="Volume up"
           {...holdAction(() => sendConsumer(CONSUMER.VOLUME_UP), MEDIA_REPEAT_MS)}
         >
           <IconVolumeUp size={20} />
@@ -241,12 +241,12 @@ export function MediaView({ conn, vibrate }: Props) {
         </button>
       </div>
 
-      {/* Controlli Riproduzione */}
-      <div className="remote-row" role="group" aria-label="Riproduzione">
+      {/* Playback controls */}
+      <div className="remote-row" role="group" aria-label="Playback">
         <button
           type="button"
           className="remote-btn"
-          aria-label="Traccia precedente"
+          aria-label="Previous track"
           onClick={() => tapConsumer(CONSUMER.PREV_TRACK)}
         >
           <IconPrev size={20} />
@@ -254,7 +254,7 @@ export function MediaView({ conn, vibrate }: Props) {
         <button
           type="button"
           className="remote-btn play-main"
-          aria-label="Play o Pausa"
+          aria-label="Play or Pause"
           onClick={() => tapConsumer(CONSUMER.PLAY_PAUSE)}
         >
           <IconPlayPause size={22} />
@@ -262,7 +262,7 @@ export function MediaView({ conn, vibrate }: Props) {
         <button
           type="button"
           className="remote-btn"
-          aria-label="Traccia successiva"
+          aria-label="Next track"
           onClick={() => tapConsumer(CONSUMER.NEXT_TRACK)}
         >
           <IconNext size={20} />

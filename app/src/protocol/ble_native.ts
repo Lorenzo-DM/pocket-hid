@@ -69,7 +69,7 @@ export class NativeBleLink extends BleBase {
           await BleClient.write(id, BLE_SVC, BLE_RX, toView(data.subarray(off, off + CHUNK)));
         }
       } catch {
-        this.cb.onError?.('write BLE non riuscito');
+        this.cb.onError?.('BLE write failed');
       }
     })();
   }

@@ -36,10 +36,10 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
     label: l,
     code: K.F1 + i,
   })),
-  { label: 'Invio', code: K.ENTER },
+  { label: 'Enter', code: K.ENTER },
   { label: 'Esc', code: K.ESC },
   { label: 'Tab', code: K.TAB },
-  { label: 'Spazio', code: K.SPACE },
+  { label: 'Space', code: K.SPACE },
   { label: '⌫ Backspace', code: K.BACKSPACE },
   { label: 'Del', code: K.DELETE },
   { label: '←', code: K.LEFT },
@@ -47,9 +47,9 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
   { label: '↓', code: K.DOWN },
   { label: '↑', code: K.UP },
   { label: 'Home', code: K.HOME },
-  { label: 'Fine', code: K.END },
-  { label: 'PgSu', code: K.PAGEUP },
-  { label: 'PgGiù', code: K.PAGEDOWN },
+  { label: 'End', code: K.END },
+  { label: 'PgUp', code: K.PAGEUP },
+  { label: 'PgDn', code: K.PAGEDOWN },
   { label: '- / _', code: K.MINUS },
   { label: '= / +', code: K.EQUAL },
   { label: '[ / {', code: K.LBRACKET },
@@ -61,26 +61,26 @@ const KEY_OPTIONS: { label: string; code: number }[] = [
   { label: ', / <', code: K.COMMA },
   { label: '. / >', code: K.DOT },
   { label: '/ / ?', code: K.SLASH },
-  { label: '(Solo modificatori, es. Win)', code: 0 },
+  { label: '(Modifiers only, e.g. Win)', code: 0 },
 ];
 
 const MEDIA_OPTIONS: { label: string; code: number }[] = [
   { label: 'Vol +', code: CONSUMER.VOLUME_UP },
   { label: 'Vol −', code: CONSUMER.VOLUME_DOWN },
   { label: 'Mute', code: CONSUMER.MUTE },
-  { label: 'Play / Pausa', code: CONSUMER.PLAY_PAUSE },
+  { label: 'Play / Pause', code: CONSUMER.PLAY_PAUSE },
   { label: 'Stop', code: CONSUMER.STOP },
-  { label: 'Traccia succ.', code: CONSUMER.NEXT_TRACK },
-  { label: 'Traccia prec.', code: CONSUMER.PREV_TRACK },
+  { label: 'Next track', code: CONSUMER.NEXT_TRACK },
+  { label: 'Prev track', code: CONSUMER.PREV_TRACK },
   { label: 'Power', code: CONSUMER.POWER },
-  { label: 'Lum +', code: CONSUMER.BRIGHTNESS_UP },
-  { label: 'Lum −', code: CONSUMER.BRIGHTNESS_DOWN },
+  { label: 'Bright +', code: CONSUMER.BRIGHTNESS_UP },
+  { label: 'Bright −', code: CONSUMER.BRIGHTNESS_DOWN },
 ];
 
 const QUICK_STEPS: { label: string; step: MacroStep }[] = [
   { label: 'Ctrl+Alt+T', step: { k: K.T, m: MOD.CTRL | MOD.ALT } },
   { label: '⊞ Win', step: { k: 0, m: MOD.GUI } },
-  { label: '↵ Invio', step: { k: K.ENTER } },
+  { label: '↵ Enter', step: { k: K.ENTER } },
   { label: 'Esc', step: { k: K.ESC } },
   { label: 'Tab', step: { k: K.TAB } },
   { label: 'Alt+Tab', step: { k: K.TAB, m: MOD.ALT } },
@@ -111,10 +111,10 @@ function stepLabel(s: MacroStep): string {
 }
 
 function stepBadge(s: MacroStep): string {
-  if ('k' in s) return 'TASTO';
-  if ('s' in s) return 'TESTO';
+  if ('k' in s) return 'KEY';
+  if ('s' in s) return 'TEXT';
   if ('c' in s) return 'MEDIA';
-  return 'ATTESA';
+  return 'WAIT';
 }
 
 export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onToast }: Props) {
@@ -151,12 +151,12 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     const off = conn.onMessage?.((msg) => {
       if (msg.t === 'macro_done') {
         setBusyEspId((b) => (b === msg.id ? null : b));
-        onToast(`Macro ESP "${msg.id}" completata`);
+        onToast(`ESP macro "${msg.id}" completed`);
       } else if (msg.t === 'macro_data') {
         if (pullingEspRef.current === msg.id) {
           pullingEspRef.current = null;
           importMacros([{ name: msg.id, steps: msg.steps }]);
-          onToast(`"${msg.id}" copiata sul telefono`);
+          onToast(`"${msg.id}" copied to phone`);
         }
       }
     });
@@ -179,7 +179,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     if (runningLocalId === macro.id) {
       stopLocalRun();
       vibrate(8);
-      onToast(`Macro "${macro.name}" fermata`);
+      onToast(`Macro "${macro.name}" stopped`);
       return;
     }
     if (runningLocalId !== null || busyEspId !== null) return;
@@ -211,7 +211,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
 
     if (runTokenRef.current === token) {
       setRunningLocalId(null);
-      onToast(`Macro "${macro.name}" completata`);
+      onToast(`Macro "${macro.name}" completed`);
     }
   };
 
@@ -231,12 +231,12 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     }
     const existsOnEsp = espMacros.includes(check.espId);
     if (!existsOnEsp && espMacros.length >= 12) {
-      onToast('Memoria ESP piena (12/12 macro). Eliminane una dall\'ESP.', 'error');
+      onToast('ESP storage full (12/12 macros). Delete one from ESP first.', 'error');
       return false;
     }
     conn.send({ t: 'macro_save', id: check.espId, steps });
     vibrate(12);
-    onToast(`Salvata anche su ESP come "${check.espId}"`);
+    onToast(`Also saved to ESP as "${check.espId}"`);
     return true;
   };
 
@@ -249,7 +249,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     }
     setConfirmDel(null);
     deleteMacro(id);
-    onToast(`Macro "${name}" eliminata`);
+    onToast(`Macro "${name}" deleted`);
   };
 
   const removeEsp = (id: string) => {
@@ -261,7 +261,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     }
     setConfirmDel(null);
     conn.send({ t: 'macro_del', id });
-    onToast(`Macro ESP "${id}" eliminata`);
+    onToast(`ESP macro "${id}" deleted`);
   };
 
   const handleSaveLocal = (alsoPushEsp: boolean) => {
@@ -271,7 +271,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     if (alsoPushEsp) {
       if (!pushToEsp(saved.name, saved.steps)) return;
     } else {
-      onToast(`Macro "${saved.name}" salvata sul telefono`);
+      onToast(`Macro "${saved.name}" saved on phone`);
     }
     setEditing(null);
     setEditMode(false);
@@ -287,7 +287,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
     a.download = 'pocket-hid-macros.json';
     a.click();
     URL.revokeObjectURL(url);
-    onToast(`Esportate ${localMacros.length} macro in JSON`);
+    onToast(`Exported ${localMacros.length} macro(s) to JSON`);
   };
 
   const handleImportFile = async (file: File | null) => {
@@ -296,14 +296,14 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
       const text = await file.text();
       const parsed = parseMacrosJson(text);
       if (parsed.length === 0) {
-        onToast('Nessuna macro valida trovata nel file JSON', 'error');
+        onToast('No valid macros found in JSON file', 'error');
         return;
       }
       const n = importMacros(parsed);
       vibrate(12);
-      onToast(`Importate ${n} macro sul telefono`);
+      onToast(`Imported ${n} macro(s) to phone`);
     } catch {
-      onToast('File JSON non valido', 'error');
+      onToast('Invalid JSON file', 'error');
     }
   };
 
@@ -339,10 +339,10 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
 
       <div className="macro-head">
         <div>
-          <h2>Macro</h2>
+          <h2>Macros</h2>
           <span className="muted-sm">
-            {localMacros.length} sul telefono
-            {espMacros.length > 0 ? ` · ${espMacros.length}/12 su ESP` : ''}
+            {localMacros.length} on phone
+            {espMacros.length > 0 ? ` · ${espMacros.length}/12 on ESP` : ''}
           </span>
         </div>
         <div className="macro-head-actions">
@@ -355,7 +355,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                 setConfirmDel(null);
               }}
             >
-              {editMode ? 'Fine' : 'Gestisci'}
+              {editMode ? 'Done' : 'Manage'}
             </button>
           )}
           <button
@@ -367,19 +367,19 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
             }}
           >
             <IconPlus size={16} />
-            <span>Nuova</span>
+            <span>New</span>
           </button>
         </div>
       </div>
 
-      {/* Barra importa / esporta JSON */}
+      {/* JSON import / export bar */}
       <div className="macro-io-bar">
         <button
           type="button"
           className="btn-secondary sm"
           onClick={() => fileInputRef.current?.click()}
         >
-          Importa JSON
+          Import JSON
         </button>
         {localMacros.length > 0 && (
           <button
@@ -387,7 +387,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
             className="btn-secondary sm"
             onClick={handleExport}
           >
-            Esporta JSON
+            Export JSON
           </button>
         )}
       </div>
@@ -397,9 +397,9 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
           <div className="empty-icon">
             <IconMacro size={28} />
           </div>
-          <h3>Nessuna macro sul telefono</h3>
+          <h3>No macros on phone</h3>
           <p className="muted">
-            Le macro vengono salvate nella memoria del telefono (senza occupare la flash dell&apos;ESP). Puoi crearle qui o importare un file JSON.
+            Macros are stored locally on your phone (without using ESP flash). Create one here or import a JSON file.
           </p>
           <div className="macro-empty-actions">
             <button
@@ -408,14 +408,14 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
               onClick={() => setEditing({ name: '', steps: [] })}
             >
               <IconPlus size={17} />
-              <span>Crea macro</span>
+              <span>Create macro</span>
             </button>
             <button
               type="button"
               className="btn-secondary"
               onClick={() => fileInputRef.current?.click()}
             >
-              Importa JSON
+              Import JSON
             </button>
           </div>
         </div>
@@ -430,7 +430,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                 <div key={m.id} className="macro-card editing">
                   <div>
                     <span className="macro-card-title">{m.name}</span>
-                    <div className="macro-card-sub">{m.steps.length} step</div>
+                    <div className="macro-card-sub">{m.steps.length} {m.steps.length === 1 ? 'step' : 'steps'}</div>
                   </div>
                   <div className="macro-card-tools">
                     <button
@@ -442,12 +442,12 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                       }}
                     >
                       <IconEdit size={15} />
-                      <span>Modifica</span>
+                      <span>Edit</span>
                     </button>
                     <button
                       type="button"
                       className="btn-secondary sm"
-                      title="Salva una copia nella memoria dell'ESP32"
+                      title="Save a copy to ESP32 storage"
                       onClick={() => pushToEsp(m.name, m.steps)}
                     >
                       → ESP
@@ -458,7 +458,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                       onClick={() => removeLocal(m.id, m.name)}
                     >
                       <IconTrash size={15} />
-                      <span>{isConfirming ? 'Sicuro?' : ''}</span>
+                      <span>{isConfirming ? 'Sure?' : ''}</span>
                     </button>
                   </div>
                 </div>
@@ -478,7 +478,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                 </span>
                 <span className="macro-card-title">{m.name}</span>
                 <span className="macro-card-sub">
-                  {isRunning ? 'In esecuzione · tocca per stop' : `${m.steps.length} step`}
+                  {isRunning ? 'Running · tap to stop' : `${m.steps.length} ${m.steps.length === 1 ? 'step' : 'steps'}`}
                 </span>
               </button>
             );
@@ -486,11 +486,11 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
         </div>
       )}
 
-      {/* Sezione opzionale: macro presenti nella NVS dell'ESP */}
+      {/* Optional section: macros stored in ESP NVS */}
       {espMacros.length > 0 && (
         <section className="macro-esp-section">
           <div className="macro-section-head">
-            <span>Salvate sull&apos;ESP</span>
+            <span>Saved on ESP</span>
             <span className="muted-sm">{espMacros.length} / 12 (NVS)</span>
           </div>
           <div className="macro-grid">
@@ -511,7 +511,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                           conn.send({ t: 'macro_get', id });
                         }}
                       >
-                        → Telefono
+                        → Phone
                       </button>
                       <button
                         type="button"
@@ -519,7 +519,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                         onClick={() => removeEsp(id)}
                       >
                         <IconTrash size={15} />
-                        <span>{isConfirming ? 'Sicuro?' : ''}</span>
+                        <span>{isConfirming ? 'Sure?' : ''}</span>
                       </button>
                     </div>
                   </div>
@@ -539,7 +539,7 @@ export function MacroView({ conn, macros: espMacros, prefs, layout, vibrate, onT
                   </span>
                   <span className="macro-card-title">{id}</span>
                   <span className="macro-card-sub">
-                    {isRunning ? 'In esecuzione su ESP…' : 'Su ESP · tocca per eseguire'}
+                    {isRunning ? 'Running on ESP…' : 'On ESP · tap to run'}
                   </span>
                 </button>
               );
@@ -618,28 +618,28 @@ function MacroEditor({
   return (
     <div className="macro-editor">
       <div className="macro-head">
-        <h2>{editing.id ? `Modifica: ${editing.name}` : 'Nuova macro'}</h2>
-        <button type="button" className="icon-btn" onClick={onCancel} aria-label="Annulla">
+        <h2>{editing.id ? `Edit: ${editing.name}` : 'New macro'}</h2>
+        <button type="button" className="icon-btn" onClick={onCancel} aria-label="Cancel">
           <IconClose size={20} />
         </button>
       </div>
 
       <label className="field">
-        <span>Nome macro</span>
+        <span>Macro name</span>
         <input
           type="text"
           value={editing.name}
           onChange={(e) => onChange({ ...editing, name: e.target.value })}
-          placeholder="es. Terminale + top, Blocca PC, Netflix"
+          placeholder="e.g. Terminal + top, Lock PC, Netflix"
           maxLength={60}
         />
       </label>
 
-      {/* Inserimento rapido */}
+      {/* Quick insert */}
       <div className="editor-card">
         <div className="editor-card-head">
-          <span>Aggiungi step</span>
-          <span className="muted-sm">{editing.steps.length} step</span>
+          <span>Add step</span>
+          <span className="muted-sm">{editing.steps.length} {editing.steps.length === 1 ? 'step' : 'steps'}</span>
         </div>
 
         <div className="shortcut-strip">
@@ -657,10 +657,10 @@ function MacroEditor({
 
         <div className="segmented compact">
           {([
-            ['key', 'Tasto'],
-            ['text', 'Testo'],
+            ['key', 'Key'],
+            ['text', 'Text'],
             ['media', 'Media'],
-            ['wait', 'Attesa'],
+            ['wait', 'Wait'],
           ] as [StepType, string][]).map(([t, label]) => (
             <button
               key={t}
@@ -701,7 +701,7 @@ function MacroEditor({
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Testo da digitare (ASCII)"
+              placeholder="Text to type (ASCII)"
             />
           )}
 
@@ -729,12 +729,12 @@ function MacroEditor({
 
           <button type="button" className="btn-secondary full" onClick={addStep}>
             <IconPlus size={16} />
-            <span>Aggiungi step</span>
+            <span>Add step</span>
           </button>
         </div>
       </div>
 
-      {/* Lista step */}
+      {/* Step list */}
       <ol className="macro-steps">
         {editing.steps.map((s, i) => (
           <li key={i} className="macro-step-row">
@@ -747,7 +747,7 @@ function MacroEditor({
                 className="step-btn"
                 disabled={i === 0}
                 onClick={() => move(i, -1)}
-                aria-label="Sposta su"
+                aria-label="Move up"
               >
                 ↑
               </button>
@@ -756,7 +756,7 @@ function MacroEditor({
                 className="step-btn"
                 disabled={i === editing.steps.length - 1}
                 onClick={() => move(i, 1)}
-                aria-label="Sposta giù"
+                aria-label="Move down"
               >
                 ↓
               </button>
@@ -764,7 +764,7 @@ function MacroEditor({
                 type="button"
                 className="step-btn danger"
                 onClick={() => removeStep(i)}
-                aria-label="Elimina step"
+                aria-label="Remove step"
               >
                 ✕
               </button>
@@ -772,13 +772,13 @@ function MacroEditor({
           </li>
         ))}
         {editing.steps.length === 0 && (
-          <li className="macro-step-empty">Nessuno step: aggiungine almeno uno sopra.</li>
+          <li className="macro-step-empty">No steps yet: add at least one above.</li>
         )}
       </ol>
 
       <div className="macro-editor-actions">
         <button type="button" className="btn-secondary" onClick={onCancel}>
-          Annulla
+          Cancel
         </button>
         <button
           type="button"
@@ -788,15 +788,15 @@ function MacroEditor({
             !espCheck.ok
               ? espCheck.reason
               : espFull
-                ? 'Memoria ESP piena (12/12)'
-                : `Salva sul telefono e copia anche sull'ESP come "${espCheck.espId}"`
+                ? 'ESP storage full (12/12)'
+                : `Save on phone and copy to ESP as "${espCheck.espId}"`
           }
           onClick={onSaveEsp}
         >
-          + Salva su ESP
+          + Save to ESP
         </button>
         <button type="button" className="btn-primary" disabled={!canSaveLocal} onClick={onSaveLocal}>
-          Salva sul telefono
+          Save on phone
         </button>
       </div>
     </div>

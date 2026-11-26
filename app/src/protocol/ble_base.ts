@@ -138,7 +138,7 @@ export abstract class BleBase implements DeviceLink {
     if (this.manualClose) return;
     this.attempts++;
     if (this.attempts > MAX_RECONNECTS) {
-      this.cb.onStatus?.('error', 'riconnessione BLE fallita: ricomincia dal Connetti');
+      this.cb.onStatus?.('error', 'BLE reconnect failed: reconnect from the Connect screen');
       return;
     }
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** Math.min(this.attempts, 4));

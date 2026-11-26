@@ -33,24 +33,24 @@ const QUICK_SHORTCUTS: { label: string; code: number; mods?: number }[] = [
   { label: 'Esc', code: K.ESC },
   { label: 'Tab', code: K.TAB },
   { label: 'Del', code: K.DELETE },
-  { label: 'Copia', code: K.C, mods: MOD.CTRL },
-  { label: 'Incolla', code: K.V, mods: MOD.CTRL },
-  { label: 'Taglia', code: K.X, mods: MOD.CTRL },
-  { label: 'Annulla', code: K.Z, mods: MOD.CTRL },
-  { label: 'Tutto', code: K.A, mods: MOD.CTRL },
+  { label: 'Copy', code: K.C, mods: MOD.CTRL },
+  { label: 'Paste', code: K.V, mods: MOD.CTRL },
+  { label: 'Cut', code: K.X, mods: MOD.CTRL },
+  { label: 'Undo', code: K.Z, mods: MOD.CTRL },
+  { label: 'Select All', code: K.A, mods: MOD.CTRL },
   { label: 'Alt+Tab', code: K.TAB, mods: MOD.ALT },
   { label: 'Alt+F4', code: K.F4, mods: MOD.ALT },
 ];
 
 const NAV_EXTRA: KeyDef[] = [
   { label: 'Home', code: K.HOME },
-  { label: 'Fine', code: K.END },
-  { label: 'PgSu', code: K.PAGEUP },
-  { label: 'PgGiù', code: K.PAGEDOWN },
+  { label: 'End', code: K.END },
+  { label: 'PgUp', code: K.PAGEUP },
+  { label: 'PgDn', code: K.PAGEDOWN },
   { label: 'Ins', code: K.INSERT },
-  { label: 'Stamp', code: K.PRINTSCREEN },
+  { label: 'PrtSc', code: K.PRINTSCREEN },
   { label: '⇪ Caps', code: K.CAPSLOCK },
-  { label: 'Pausa', code: K.PAUSE },
+  { label: 'Pause', code: K.PAUSE },
 ];
 
 const FN_KEYS: KeyDef[] = Array.from({ length: 12 }, (_, i) => ({
@@ -233,8 +233,8 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
       {/* Sezione tastiera nativa / invio testo */}
       <section className="type-card">
         <div className="type-card-head">
-          <span className="type-label">Tastiera del telefono</span>
-          <div className="mini-seg" role="tablist" aria-label="Modalità scrittura">
+          <span className="type-label">Phone keyboard</span>
+          <div className="mini-seg" role="tablist" aria-label="Input mode">
             <button
               type="button"
               role="tab"
@@ -245,7 +245,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
                 setText('');
               }}
             >
-              Frase
+              Phrase
             </button>
             <button
               type="button"
@@ -268,8 +268,8 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
             value={text}
             placeholder={
               inputMode === 'live'
-                ? 'Digita qui per inviare in tempo reale…'
-                : 'Scrivi, detta o incolla una frase…'
+                ? 'Type here to send in real time…'
+                : 'Type, dictate, or paste a phrase…'
             }
             onCompositionStart={() => {
               composingRef.current = true;
@@ -321,7 +321,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
               onClick={() => handlePhraseSend(false)}
             >
               <IconSend size={16} />
-              <span>Invia</span>
+              <span>Send</span>
             </button>
             <button
               type="button"
@@ -329,7 +329,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
               onClick={() => handlePhraseSend(true)}
             >
               <IconReturn size={16} />
-              <span>{text ? 'Invia + ↵' : 'Invio'}</span>
+              <span>{text ? 'Send + ↵' : 'Enter'}</span>
             </button>
           </div>
         )}
@@ -337,14 +337,14 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
         {!isIt && nonAscii > 0 && (
           <p className="type-note">
             {prefs.transliterate
-              ? `Accenti convertiti in ASCII${remainingDropped > 0 ? ' (emoji ignorate)' : ''}.`
-              : `⚠ ${nonAscii} carattere/i non ASCII verranno saltati dal firmware (layout US).`}
+              ? `Accents converted to ASCII${remainingDropped > 0 ? ' (emoji skipped)' : ''}.`
+              : `⚠ ${nonAscii} non-ASCII character(s) will be skipped by firmware (US layout).`}
           </p>
         )}
       </section>
 
-      {/* Modificatori sticky / bloccabili */}
-      <div className="kb-mods" role="group" aria-label="Modificatori">
+      {/* Sticky / lockable modifiers */}
+      <div className="kb-mods" role="group" aria-label="Modifiers">
         {MOD_KEYS.map((m) => {
           const isLocked = Boolean(lockedMods & m.id);
           const isActive = Boolean(mods & m.id) || isLocked;
@@ -354,17 +354,17 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
               type="button"
               className={`key mod ${isActive ? 'active' : ''} ${isLocked ? 'locked' : ''}`}
               onClick={() => toggleMod(m.id)}
-              title="Tap: singolo · Doppio tap: blocca"
+              title="Tap: one-shot · Double tap: lock"
             >
               <span>{m.label}</span>
-              {isLocked && <span className="mod-lock-dot" aria-label="bloccato" />}
+              {isLocked && <span className="mod-lock-dot" aria-label="locked" />}
             </button>
           );
         })}
       </div>
 
-      {/* Scorciatoie rapide scorrevoli */}
-      <div className="shortcut-strip" role="group" aria-label="Scorciatoie rapide">
+      {/* Scrollable quick shortcuts */}
+      <div className="shortcut-strip" role="group" aria-label="Quick shortcuts">
         {QUICK_SHORTCUTS.map((s) => (
           <button
             key={s.label}
@@ -377,8 +377,8 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
         ))}
       </div>
 
-      {/* Selettore tastierino mobile */}
-      <div className="segmented compact" role="tablist" aria-label="Sezione tasti">
+      {/* Keypad section selector */}
+      <div className="segmented compact" role="tablist" aria-label="Key section">
         <button
           type="button"
           role="tab"
@@ -386,7 +386,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
           className={`seg-btn ${padTab === 'nav' ? 'active' : ''}`}
           onClick={() => setPadTab('nav')}
         >
-          Frecce
+          Arrows
         </button>
         <button
           type="button"
@@ -413,26 +413,26 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
           className={`seg-btn ${padTab === 'symbols' ? 'active' : ''}`}
           onClick={() => setPadTab('symbols')}
         >
-          Simboli
+          Symbols
         </button>
       </div>
 
-      {/* Pannello attivo */}
+      {/* Active panel */}
       {padTab === 'nav' && (
         <div className="kb-panel">
           <div className="arrow-pad">
             <div />
-            <button type="button" className="key arrow-key" onClick={() => tapKey(K.UP)} aria-label="Su">
+            <button type="button" className="key arrow-key" onClick={() => tapKey(K.UP)} aria-label="Up">
               <IconChevron dir="up" size={22} />
             </button>
             <div />
-            <button type="button" className="key arrow-key" onClick={() => tapKey(K.LEFT)} aria-label="Sinistra">
+            <button type="button" className="key arrow-key" onClick={() => tapKey(K.LEFT)} aria-label="Left">
               <IconChevron dir="left" size={22} />
             </button>
-            <button type="button" className="key arrow-key" onClick={() => tapKey(K.DOWN)} aria-label="Giù">
+            <button type="button" className="key arrow-key" onClick={() => tapKey(K.DOWN)} aria-label="Down">
               <IconChevron dir="down" size={22} />
             </button>
-            <button type="button" className="key arrow-key" onClick={() => tapKey(K.RIGHT)} aria-label="Destra">
+            <button type="button" className="key arrow-key" onClick={() => tapKey(K.RIGHT)} aria-label="Right">
               <IconChevron dir="right" size={22} />
             </button>
           </div>
@@ -447,10 +447,10 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
 
           <div className="kb-row">
             <button type="button" className="key" style={{ flex: 2.2 }} onClick={() => tapKey(K.SPACE)}>
-              Spazio
+              Space
             </button>
             <button type="button" className="key accent-key" style={{ flex: 1.2 }} onClick={() => tapKey(K.ENTER)}>
-              Invio ↵
+              Enter ↵
             </button>
           </div>
         </div>
@@ -469,7 +469,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
             <button type="button" className="key" onClick={() => tapKey(K.ESC)}>Esc</button>
             <button type="button" className="key" onClick={() => tapKey(K.TAB)}>Tab</button>
             <button type="button" className="key" onClick={() => tapKey(K.DELETE)}>Del</button>
-            <button type="button" className="key accent-key" onClick={() => tapKey(K.ENTER)}>Invio ↵</button>
+            <button type="button" className="key accent-key" onClick={() => tapKey(K.ENTER)}>Enter ↵</button>
           </div>
         </div>
       )}
@@ -499,7 +499,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
               Tab
             </button>
             <button type="button" className="key qwerty-key" style={{ flex: 3.6 }} onClick={() => tapKey(K.SPACE)}>
-              Spazio
+              Space
             </button>
             <button type="button" className="key qwerty-key accent-key" style={{ flex: 1.6 }} onClick={() => tapKey(K.ENTER)}>
               ↵
@@ -533,7 +533,7 @@ export function KeyboardView({ conn, prefs, layout, vibrate }: Props) {
               Tab
             </button>
             <button type="button" className="key qwerty-key" style={{ flex: 3.6 }} onClick={() => tapKey(K.SPACE)}>
-              Spazio
+              Space
             </button>
             <button type="button" className="key qwerty-key accent-key" style={{ flex: 1.6 }} onClick={() => tapKey(K.ENTER)}>
               ↵

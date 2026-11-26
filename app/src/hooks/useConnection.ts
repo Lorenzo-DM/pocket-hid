@@ -15,7 +15,7 @@ export const TOKEN_KEY = 'mk.token';
 
 export function isServedByEsp(): boolean {
   return (
-    location.protocol.startsWith('http') &&
+    location.protocol === 'http:' &&
     !['localhost', '127.0.0.1', ''].includes(location.hostname)
   );
 }
@@ -33,7 +33,10 @@ export function currentTransport(): Transport {
     const t = localStorage.getItem(TRANSPORT_KEY);
     if (t === 'ble' || t === 'ws') return t;
   } catch {
-    // storage non disponibile
+    // storage unavailable
+  }
+  if (!Capacitor.isNativePlatform() && location.protocol === 'https:') {
+    return 'ble';
   }
   return 'ws';
 }
