@@ -13,6 +13,12 @@ Phone (PWA or Android app)
   (Composite USB HID: keyboard + mouse + media keys)
 ```
 
+## Screenshots
+
+| Trackpad | Remote | Keyboard | Macros |
+|:---:|:---:|:---:|:---:|
+| ![Trackpad](docs/screenshots/trackpad.jpg) | ![Remote](docs/screenshots/remote.jpg) | ![Keyboard](docs/screenshots/keyboard.jpg) | ![Macros](docs/screenshots/macros.jpg) |
+
 ## Features
 
 - **True USB HID hardware bridge** (TinyUSB): appears to the target as a standard USB keyboard (6KRO), mouse, and consumer/media controller — works in BIOS, smart TVs, consoles, locked-down PCs, and tablets.
@@ -48,8 +54,9 @@ Phone (PWA or Android app)
 2. Connect your ESP32-S3 via USB-C and click **Install PocketHID** (flashes both the firmware and the built-in PWA).
 3. Plug the ESP32-S3's **USB-OTG** port into your TV or PC.
 4. Connect from your phone:
-   - **Via BLE**: open the app, switch to Bluetooth, and pair with `PocketHID`.
-   - **Via WiFi**: join the `PocketHID-XXXX` hotspot (default password: `pockethid1`), open `http://192.168.4.1/portal` to save your home WiFi credentials, and after reboot open `http://pockethid.local/`.
+   - **Via BLE (recommended, installable HTTPS PWA)**: open the **[Hosted Web App](https://lorenzo-dm.github.io/pocket-hid/app/)** in Chrome/Edge (you can install it to your home screen as a PWA) and pair with `PocketHID`.
+   - **Via Android App (BLE + WiFi)**: download the `.apk` directly from **[GitHub Releases](https://github.com/lorenzo-dm/pocket-hid/releases)** — supports both native BLE and WiFi without HTTPS/Mixed-Content restrictions.
+   - **Via WiFi (built-in ESP32 PWA)**: join the `PocketHID-XXXX` hotspot (default password: `pockethid1`), open `http://192.168.4.1/portal` to save your home WiFi credentials, and after reboot open `http://pockethid.local/`.
 
 *(To enable GitHub Pages on a fork, go to **Settings → Pages → Source: GitHub Actions** and run the `Release & Web Flasher` workflow or push a `v*` tag.)*
 
