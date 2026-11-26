@@ -86,6 +86,7 @@ export function useConnection() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastSeq = useRef(0);
   const autoTriedRef = useRef(false);
+  const sessionActiveRef = useRef(false);
 
   const showToast = useCallback((text: string, kind: 'info' | 'error' = 'info') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -108,10 +109,14 @@ export function useConnection() {
         setStatus(s);
         setStatusDetail(detail);
         if (s === 'ready') {
+          sessionActiveRef.current = true;
           setSessionActive(true);
         } else if (s === 'closed') {
+          sessionActiveRef.current = false;
           setSessionActive(false);
           setDevice(null);
+        } else if (s === 'error' && detail && sessionActiveRef.current) {
+          showToast(detail, 'error');
         }
       },
       onDeviceInfo: setDevice,
@@ -139,6 +144,7 @@ export function useConnection() {
       setStatus('idle');
       setStatusDetail(undefined);
       setDevice(null);
+      sessionActiveRef.current = false;
       setSessionActive(false);
       setTransportState(next);
       setConn(createLink(next));
@@ -148,6 +154,7 @@ export function useConnection() {
 
   const disconnect = useCallback(() => {
     conn.disconnect();
+    sessionActiveRef.current = false;
     setSessionActive(false);
     setDevice(null);
   }, [conn]);

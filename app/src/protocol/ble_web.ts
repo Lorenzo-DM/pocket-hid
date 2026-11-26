@@ -2,11 +2,20 @@
 // requestDevice requires a user gesture only on the first pick; reconnecting
 // reuses the previously selected device without another gesture.
 
-import { BleBase, BLE_SVC, BLE_RX, BLE_TX } from './ble_base';
+import {
+  BleBase,
+  BLE_SVC,
+  BLE_RX,
+  BLE_TX,
+  isBleCancelError,
+  withTimeout,
+} from './ble_base';
 
 // Above this size, use long write (with response), which the OS fragments;
 // below it, use write-without-response for minimal latency.
 const FAST_WRITE_MAX = 244;
+const GATT_CONNECT_TIMEOUT_MS = 10000;
+const GATT_SETUP_TIMEOUT_MS = 8000;
 
 export class WebBleLink extends BleBase {
   private device: BluetoothDevice | null = null;
@@ -14,7 +23,7 @@ export class WebBleLink extends BleBase {
   private txChar: BluetoothRemoteGATTCharacteristic | null = null;
 
   protected async open() {
-    this.status('connecting');
+    this.status(this.reconnecting ? 'reconnecting' : 'connecting');
 
     if (!navigator.bluetooth) {
       this.handleError(
@@ -28,6 +37,10 @@ export class WebBleLink extends BleBase {
         this.device = await navigator.bluetooth.requestDevice({
           filters: [{ services: [BLE_SVC] }],
         });
+        if (this.manualClose) {
+          this.releaseDevice();
+          return;
+        }
         this.device.addEventListener('gattserverdisconnected', () => {
           this.rxChar = null;
           this.txChar = null;
@@ -37,11 +50,31 @@ export class WebBleLink extends BleBase {
       if (!this.device.gatt) throw new Error('GATT unavailable');
 
       this.status('authing');
-      const server = await this.device.gatt.connect();
-      const svc = await server.getPrimaryService(BLE_SVC);
-      this.txChar = await svc.getCharacteristic(BLE_TX);
-      this.rxChar = await svc.getCharacteristic(BLE_RX);
-      await this.txChar.startNotifications();
+      const server = await withTimeout(
+        this.device.gatt.connect(),
+        GATT_CONNECT_TIMEOUT_MS,
+        'GATT connect timed out'
+      );
+      if (this.manualClose) {
+        this.releaseDevice();
+        return;
+      }
+
+      await withTimeout(
+        (async () => {
+          const svc = await server.getPrimaryService(BLE_SVC);
+          this.txChar = await svc.getCharacteristic(BLE_TX);
+          this.rxChar = await svc.getCharacteristic(BLE_RX);
+          await this.txChar.startNotifications();
+        })(),
+        GATT_SETUP_TIMEOUT_MS,
+        'GATT service setup timed out'
+      );
+      if (this.manualClose || !this.txChar) {
+        this.releaseDevice();
+        return;
+      }
+
       this.txChar.addEventListener('characteristicvaluechanged', (ev) => {
         const ch = ev.target as BluetoothRemoteGATTCharacteristic;
         if (ch.value) this.handleNotify(ch.value);
@@ -50,8 +83,13 @@ export class WebBleLink extends BleBase {
       // Handshake (pairing already completed: encrypted write accepted)
       this.sendHello();
     } catch (e) {
+      if (this.manualClose) return;
+      if (!this.reconnecting && isBleCancelError(e)) {
+        this.status('idle');
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
-      this.handleError(`BLE: ${msg}`);
+      this.handleOpenFailure(`BLE: ${msg}`);
     }
   }
 
@@ -63,14 +101,18 @@ export class WebBleLink extends BleBase {
     } else if (ch.properties.write) {
       ch.writeValueWithResponse?.(data).catch(() => this.cb.onError?.('BLE write failed'));
     } else {
-      ch.writeValue(data).catch(() => undefined);
+      ch.writeValue(data).catch(() => this.cb.onError?.('BLE write failed'));
     }
   }
 
-  protected releaseDevice() {
+  protected dropConnection() {
     this.device?.gatt.disconnect();
-    this.device = null;
     this.rxChar = null;
     this.txChar = null;
+  }
+
+  protected releaseDevice() {
+    this.dropConnection();
+    this.device = null;
   }
 }

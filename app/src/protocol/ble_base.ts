@@ -10,7 +10,9 @@ export const BLE_SVC = '7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f';
 export const BLE_RX = '7a0c1001-8b6d-4d3f-9a2e-5f1c2b3d4e5f'; // app -> ESP
 export const BLE_TX = '7a0c1002-8b6d-4d3f-9a2e-5f1c2b3d4e5f'; // ESP -> app
 
+const HELLO_TIMEOUT_MS = 5000;
 const HEARTBEAT_MS = 15000;
+const HEARTBEAT_TIMEOUT_MS = 5000;
 const MAX_BACKOFF_MS = 15000;
 const MAX_RECONNECTS = 5;
 const RX_BUF_MAX = 4096;
@@ -19,12 +21,33 @@ const RX_CHUNK_TIMEOUT_MS = 1500;
 export const encoder = new TextEncoder();
 export const decoder = new TextDecoder();
 
+export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+export function isBleCancelError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === 'NotFoundError') return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /user cancel|cancel(l)?ed|no device selected/i.test(msg);
+}
+
 export abstract class BleBase implements DeviceLink {
   protected cb: ConnectionCallbacks = {};
   protected manualClose = false;
+  protected hasConnected = false;
+  protected reconnecting = false;
   protected attempts = 0;
+  private ignoringDisconnect = false;
+  private helloTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
   private rxTimer: ReturnType<typeof setTimeout> | null = null;
   private rxBuf = '';
   private rxDecoder = new TextDecoder();
@@ -41,14 +64,24 @@ export abstract class BleBase implements DeviceLink {
 
   connect(_url?: string, _token?: string) {
     this.manualClose = false;
+    this.hasConnected = false;
+    this.reconnecting = false;
     this.attempts = 0;
+    this.clearTimers();
     void this.open();
   }
 
   disconnect() {
     this.manualClose = true;
+    this.hasConnected = false;
+    this.reconnecting = false;
     this.clearTimers();
-    this.releaseDevice();
+    this.ignoringDisconnect = true;
+    try {
+      this.releaseDevice();
+    } finally {
+      this.ignoringDisconnect = false;
+    }
     this.cb.onStatus?.('closed');
   }
 
@@ -73,6 +106,10 @@ export abstract class BleBase implements DeviceLink {
   // Write raw bytes; urgent=true may use write-without-response
   protected abstract writeRaw(data: Uint8Array, urgent: boolean): void;
 
+  // Disconnect GATT without forgetting the selected device (for reconnects)
+  protected abstract dropConnection(): void;
+
+  // Disconnect GATT and forget the selected device (manual close / initial failure)
   protected abstract releaseDevice(): void;
 
   // --- called by subclasses ---
@@ -80,6 +117,8 @@ export abstract class BleBase implements DeviceLink {
   protected handleNotify(data: DataView) {
     const chunk = this.rxDecoder.decode(data, { stream: true });
     if (!chunk) return;
+
+    this.clearHeartbeatTimeout();
 
     if (this.rxTimer) {
       clearTimeout(this.rxTimer);
@@ -106,9 +145,14 @@ export abstract class BleBase implements DeviceLink {
     switch (msg.t) {
       case 'welcome':
       case 'state': {
+        this.clearHello();
+        this.hasConnected = true;
+        this.reconnecting = false;
+        this.attempts = 0;
         const info: DeviceInfo = msg;
         this.cb.onDeviceInfo?.(info);
         this.cb.onStatus?.('ready');
+        this.startHeartbeat();
         break;
       }
       case 'error':
@@ -118,16 +162,46 @@ export abstract class BleBase implements DeviceLink {
   }
 
   protected sendHello() {
-    this.attempts = 0;
-    this.startHeartbeat();
+    this.clearHello();
     this.writeRaw(encoder.encode(serialize({ t: 'hello', v: 1 })), false);
+    this.helloTimer = setTimeout(() => {
+      if (this.manualClose) return;
+      this.handleOpenFailure('BLE: No handshake response from ESP32 (hello timeout)');
+    }, HELLO_TIMEOUT_MS);
   }
 
   protected onLinkLost() {
-    if (this.manualClose) return;
+    if (this.manualClose || this.ignoringDisconnect) return;
     this.clearTimers();
-    this.cb.onStatus?.('reconnecting');
+    if (!this.hasConnected) {
+      this.releaseDevice();
+      this.cb.onStatus?.('error', 'BLE: Connection dropped during setup');
+      return;
+    }
+    this.reconnecting = true;
     this.scheduleReconnect();
+  }
+
+  protected handleOpenFailure(msg: string) {
+    this.clearTimers();
+    this.ignoringDisconnect = true;
+    try {
+      if (this.reconnecting) {
+        this.dropConnection();
+      } else {
+        this.releaseDevice();
+      }
+    } finally {
+      this.ignoringDisconnect = false;
+    }
+
+    if (this.manualClose) return;
+
+    if (this.reconnecting) {
+      this.scheduleReconnect();
+      return;
+    }
+    this.cb.onStatus?.('error', msg);
   }
 
   protected handleError(msg: string) {
@@ -138,9 +212,11 @@ export abstract class BleBase implements DeviceLink {
     if (this.manualClose) return;
     this.attempts++;
     if (this.attempts > MAX_RECONNECTS) {
+      this.reconnecting = false;
       this.cb.onStatus?.('error', 'BLE reconnect failed: reconnect from the Connect screen');
       return;
     }
+    this.cb.onStatus?.('reconnecting');
     const delay = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** Math.min(this.attempts, 4));
     this.reconnectTimer = setTimeout(() => {
       void this.open();
@@ -149,13 +225,43 @@ export abstract class BleBase implements DeviceLink {
 
   private startHeartbeat() {
     this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => this.send({ t: 'state' }), HEARTBEAT_MS);
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ t: 'state' });
+      this.clearHeartbeatTimeout();
+      this.heartbeatTimeoutTimer = setTimeout(() => {
+        if (this.manualClose) return;
+        this.ignoringDisconnect = true;
+        try {
+          this.dropConnection();
+        } finally {
+          this.ignoringDisconnect = false;
+        }
+        this.clearTimers();
+        this.reconnecting = true;
+        this.scheduleReconnect();
+      }, HEARTBEAT_TIMEOUT_MS);
+    }, HEARTBEAT_MS);
   }
 
   private stopHeartbeat() {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+    this.clearHeartbeatTimeout();
+  }
+
+  private clearHeartbeatTimeout() {
+    if (this.heartbeatTimeoutTimer) {
+      clearTimeout(this.heartbeatTimeoutTimer);
+      this.heartbeatTimeoutTimer = null;
+    }
+  }
+
+  private clearHello() {
+    if (this.helloTimer) {
+      clearTimeout(this.helloTimer);
+      this.helloTimer = null;
     }
   }
 
@@ -169,6 +275,7 @@ export abstract class BleBase implements DeviceLink {
   }
 
   private clearTimers() {
+    this.clearHello();
     this.stopHeartbeat();
     this.resetRx();
     if (this.reconnectTimer) {

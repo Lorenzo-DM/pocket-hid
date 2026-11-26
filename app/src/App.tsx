@@ -57,6 +57,7 @@ export default function App() {
         <>
           <StatusBar
             status={status}
+            statusDetail={statusDetail}
             device={device}
             transport={transport}
             onOpenSettings={() => setSettingsOpen(true)}
