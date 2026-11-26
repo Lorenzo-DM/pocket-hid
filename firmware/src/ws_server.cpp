@@ -31,7 +31,7 @@ struct WsClientSlot {
 static WsClientSlot s_slots[WS_MAX_CLIENTS];
 static SemaphoreHandle_t s_slotsMux = nullptr;
 
-// Stato OTA (upload su async_tcp, reboot differito su loopTask)
+// OTA state (upload on async_tcp, deferred reboot on loopTask)
 static std::atomic<bool> s_otaActive{false};
 static std::atomic<bool> s_otaAuthed{false};
 static std::atomic<bool> s_otaUploadReceived{false};
@@ -40,7 +40,7 @@ static std::atomic<bool> s_otaRebootPending{false};
 static uint32_t s_otaRebootAt = 0;
 
 // ---------------------------------------------------------------------------
-// Utility JSON / invio / token HTTP
+// JSON / send / HTTP token helpers
 // ---------------------------------------------------------------------------
 
 static void send_error(AsyncWebSocketClient* client, const char* msg) {
@@ -69,7 +69,7 @@ static String extract_http_token(AsyncWebServerRequest* req) {
 }
 
 // ---------------------------------------------------------------------------
-// Tabella client per-id (thread-safe tra async_tcp e loopTask)
+// Per-client table (thread-safe between async_tcp and loopTask)
 // ---------------------------------------------------------------------------
 
 static WsClientSlot* find_slot_locked(uint32_t id) {
@@ -138,45 +138,45 @@ static void slot_set_authed(uint32_t id, bool authed) {
 }
 
 // ---------------------------------------------------------------------------
-// Gestione messaggi WebSocket (contesto async_tcp: zero delay, zero NVS/HID)
+// WebSocket message handling (async_tcp context: no delay, no NVS/HID)
 // ---------------------------------------------------------------------------
 
 static void handle_message(AsyncWebSocketClient* client, const char* data, size_t len) {
   JsonDocument doc;
   if (deserializeJson(doc, data, len) != DeserializationError::Ok || !doc.is<JsonObject>()) {
-    send_error(client, "json non valido");
+    send_error(client, "invalid JSON");
     return;
   }
 
   const char* t = doc["t"] | "";
   const uint32_t clientId = client->id();
 
-  // Handshake: unico punto di auth per-client (token + versione protocollo)
+  // Handshake: single per-client auth point (token + protocol version)
   if (!strcmp(t, "hello")) {
     if (!doc["v"].isNull() && (doc["v"] | 0) != 1) {
-      send_error(client, "versione protocollo non compatibile");
+      send_error(client, "unsupported protocol version");
       client->close();
       return;
     }
     const char* token = doc["token"] | "";
     if (!mk_token_valid(token)) {
-      send_error(client, "token non valido");
+      send_error(client, "invalid token");
       client->close();
       return;
     }
     slot_set_authed(clientId, true);
     if (!commands_enqueue_welcome(Transport::WS, clientId)) {
-      send_error(client, "coda comandi piena");
+      send_error(client, "command queue full");
     }
     return;
   }
 
   if (!slot_is_authed(clientId)) {
-    send_error(client, "autenticazione richiesta (inviare hello)");
+    send_error(client, "authentication required (send hello)");
     return;
   }
 
-  // Hot-path zero-malloc per mouse/scroll a 60 Hz
+  // Hot-path zero-malloc for 60 Hz mouse/scroll
   if (!strcmp(t, "mouse")) {
     commands_enqueue_mouse(static_cast<int16_t>(doc["dx"] | 0),
                            static_cast<int16_t>(doc["dy"] | 0));
@@ -189,12 +189,12 @@ static void handle_message(AsyncWebSocketClient* client, const char* data, size_
   }
 
   if (!commands_enqueue_json(Transport::WS, clientId, data, len)) {
-    send_error(client, "coda comandi piena o messaggio troppo grande");
+    send_error(client, "command queue full or message too large");
   }
 }
 
 // ---------------------------------------------------------------------------
-// Eventi WebSocket (supporta frame frammentati tramite AwsFrameInfo)
+// WebSocket events (supports fragmented frames via AwsFrameInfo)
 // ---------------------------------------------------------------------------
 
 static void on_ws_event(AsyncWebSocket*, AsyncWebSocketClient* client,
@@ -204,7 +204,7 @@ static void on_ws_event(AsyncWebSocket*, AsyncWebSocketClient* client,
       Serial.printf("[ws] connect #%u %s:%u\n", static_cast<unsigned>(client->id()),
                     client->remoteIP().toString().c_str(), client->remotePort());
       if (!slot_add(client->id())) {
-        send_error(client, "troppi client connessi");
+        send_error(client, "too many connected clients");
         client->close();
       }
       break;
@@ -224,18 +224,18 @@ static void on_ws_event(AsyncWebSocket*, AsyncWebSocketClient* client,
       auto* info = static_cast<AwsFrameInfo*>(arg);
       if (!info) return;
 
-      // Percorso veloce: frame singolo completo di testo
+      // Fast path: single complete text frame
       if (info->final && info->index == 0 && info->len == len) {
         if (info->opcode != WS_TEXT) return;
         if (len > WS_RX_MAX) {
-          send_error(client, "messaggio troppo grande");
+          send_error(client, "message too large");
           return;
         }
         handle_message(client, reinterpret_cast<const char*>(data), len);
         return;
       }
 
-      // Frame frammentati: accumulo per-client
+      // Fragmented frames: per-client reassembly buffer
       if (info->index == 0 && info->opcode != WS_TEXT) return;
 
       std::string complete;
@@ -261,7 +261,7 @@ static void on_ws_event(AsyncWebSocket*, AsyncWebSocketClient* client,
       }
 
       if (overflow) {
-        send_error(client, "messaggio troppo grande");
+        send_error(client, "message too large");
       } else if (ready) {
         handle_message(client, complete.data(), complete.size());
       }
@@ -275,7 +275,7 @@ static void on_ws_event(AsyncWebSocket*, AsyncWebSocketClient* client,
 }
 
 // ---------------------------------------------------------------------------
-// OTA: GET /update + POST /update (protetto da MK_TOKEN se configurato)
+// OTA: GET /update + POST /update (protected by MK_TOKEN if configured)
 // ---------------------------------------------------------------------------
 
 static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
@@ -283,7 +283,7 @@ static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
   if (index == 0) {
     s_otaUploadReceived.store(true, std::memory_order_relaxed);
     if (s_otaActive.load(std::memory_order_acquire)) {
-      Serial.println("[ota] upload rifiutato: un altro OTA e' gia' in corso");
+      Serial.println("[ota] upload rejected: another OTA is already in progress");
       s_otaAuthed.store(false, std::memory_order_relaxed);
       s_otaOk.store(false, std::memory_order_relaxed);
       return;
@@ -291,7 +291,7 @@ static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
 
     const String token = extract_http_token(req);
     if (!mk_token_valid(token.c_str())) {
-      Serial.println("[ota] upload rifiutato: token non valido");
+      Serial.println("[ota] upload rejected: invalid token");
       s_otaAuthed.store(false, std::memory_order_relaxed);
       s_otaOk.store(false, std::memory_order_relaxed);
       return;
@@ -300,7 +300,7 @@ static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
     s_otaAuthed.store(true, std::memory_order_relaxed);
     Serial.printf("[ota] upload %s\n", filename.c_str());
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-      Serial.printf("[ota] Update.begin fallito (err=%u)\n", (unsigned)Update.getError());
+      Serial.printf("[ota] Update.begin failed (err=%u)\n", (unsigned)Update.getError());
       s_otaOk.store(false, std::memory_order_relaxed);
       return;
     }
@@ -315,7 +315,7 @@ static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
   }
 
   if (len > 0 && Update.write(data, len) != len) {
-    Serial.printf("[ota] Update.write fallito (err=%u)\n", (unsigned)Update.getError());
+    Serial.printf("[ota] Update.write failed (err=%u)\n", (unsigned)Update.getError());
     Update.abort();
     s_otaActive.store(false, std::memory_order_release);
     s_otaOk.store(false, std::memory_order_relaxed);
@@ -326,28 +326,27 @@ static void on_update_upload(AsyncWebServerRequest* req, const String& filename,
     const bool ok = Update.end(true);
     s_otaActive.store(false, std::memory_order_release);
     s_otaOk.store(ok, std::memory_order_relaxed);
-    Serial.printf("[ota] %s (%u byte)\n", ok ? "completato" : "errore",
+    Serial.printf("[ota] %s (%u bytes)\n", ok ? "completed" : "error",
                   static_cast<unsigned>(index + len));
   }
 }
 
 static String build_ota_html() {
   String html =
-    "<!doctype html><html lang='it'><head><meta charset='utf-8'>"
+    "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<title>PocketHID OTA</title></head>"
     "<body style='font-family:system-ui;padding:24px;max-width:420px;margin:0 auto'>"
-    "<h1>Aggiornamento firmware</h1>"
+    "<h1>Firmware Update</h1>"
     "<form method='POST' action='/update' enctype='multipart/form-data'>";
   if (mk_token_enabled()) {
-    // Campo token PRIMA del file cosi' ESPAsyncWebServer lo rende disponibile
-    // a on_update_upload gia' su index == 0.
+    // Token field BEFORE file so ESPAsyncWebServer exposes it to on_update_upload at index == 0.
     html += "<p>Token<br><input type='password' name='token' required "
             "style='width:100%;padding:8px;box-sizing:border-box'></p>";
   }
   html +=
     "<p><input type='file' name='bin' accept='.bin' required></p>"
-    "<button style='display:block;margin-top:12px;padding:12px;width:100%'>Carica e riavvia</button>"
+    "<button style='display:block;margin-top:12px;padding:12px;width:100%'>Upload and reboot</button>"
     "</form></body></html>";
   return html;
 }
@@ -370,21 +369,21 @@ void ws_server_begin(uint16_t port) {
   s_ws.onEvent(on_ws_event);
   server.addHandler(&s_ws);
 
-  // Monta LittleFS prima di decidere il path del portal ("/" vs "/portal"),
-  // ma registra serveStatic DOPO tutte le route API perche' e' un catch-all.
+  // Mount LittleFS before deciding portal path ("/" vs "/portal"),
+  // but register serveStatic AFTER all API routes because it is a catch-all.
   const bool fsOk = LittleFS.begin(true);
   if (fsOk) {
-    Serial.printf("[ws] LittleFS ok: %u byte usati / %u\n",
+    Serial.printf("[ws] LittleFS ok: %u bytes used / %u\n",
                   static_cast<unsigned>(LittleFS.usedBytes()),
                   static_cast<unsigned>(LittleFS.totalBytes()));
   } else {
-    Serial.println("[ws] LittleFS non montato: PWA non servita (uploadfs?)");
+    Serial.println("[ws] LittleFS not mounted: PWA not served (uploadfs?)");
   }
 
-  // Portal WiFi (config credenziali + captive portal)
+  // WiFi portal (credential setup + captive portal)
   wifi_portal_routes(server, fsOk ? "/portal" : "/");
 
-  // Endpoint HTTP di diagnostica
+  // Diagnostic HTTP endpoint
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest* req) {
     JsonDocument d;
     d["fw"] = MK_FW_VERSION;
@@ -394,7 +393,7 @@ void ws_server_begin(uint16_t port) {
     req->send(200, "application/json", out);
   });
 
-  // OTA: form minimale di upload + endpoint POST
+  // OTA: minimal upload form + POST endpoint
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest* req) {
     req->send(200, "text/html", build_ota_html());
   });
@@ -408,11 +407,11 @@ void ws_server_begin(uint16_t port) {
 
       if (!authed) {
         if (s_otaActive.exchange(false, std::memory_order_acq_rel)) Update.abort();
-        req->send(401, "text/plain", "Token non valido");
+        req->send(401, "text/plain", "Invalid token");
         return;
       }
       if (!hadUpload) {
-        req->send(400, "text/plain", "Nessun file caricato");
+        req->send(400, "text/plain", "No file uploaded");
         return;
       }
       if (s_otaActive.exchange(false, std::memory_order_acq_rel)) {
@@ -422,16 +421,16 @@ void ws_server_begin(uint16_t port) {
 
       const bool ok = s_otaOk.load(std::memory_order_relaxed) && !Update.hasError();
       req->send(ok ? 200 : 500, "text/plain",
-                ok ? "OK, riavvio in corso..." : "ERRORE upload");
+                ok ? "OK, rebooting..." : "Upload ERROR");
       if (ok) {
-        // Riavvio differito sul loopTask (niente delay/restart nel callback HTTP)
+        // Deferred reboot on loopTask (no delay/restart inside HTTP callback)
         s_otaRebootAt = millis() + 400;
         s_otaRebootPending.store(true, std::memory_order_release);
       }
     },
     on_update_upload);
 
-  // PWA da LittleFS (catch-all: registrato DOPO le route API)
+  // PWA from LittleFS (catch-all: registered AFTER all API routes)
   if (fsOk) {
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   }
@@ -440,7 +439,7 @@ void ws_server_begin(uint16_t port) {
 }
 
 void ws_server_loop() {
-  // Chiude client non autenticati oltre il timeout hello (5 s)
+  // Close unauthenticated clients past the hello timeout (5 s)
   uint32_t timedOut[WS_MAX_CLIENTS];
   size_t timedOutCount = 0;
   const uint32_t now = millis();
@@ -455,15 +454,15 @@ void ws_server_loop() {
     xSemaphoreGive(s_slotsMux);
   }
   for (size_t i = 0; i < timedOutCount; ++i) {
-    Serial.printf("[ws] timeout hello per client #%u, chiusura\n",
+    Serial.printf("[ws] hello timeout for client #%u, closing\n",
                   static_cast<unsigned>(timedOut[i]));
     s_ws.close(timedOut[i]);
   }
 
-  // Reboot differito post-OTA
+  // Deferred post-OTA reboot
   if (s_otaRebootPending.load(std::memory_order_acquire) &&
       static_cast<int32_t>(now - s_otaRebootAt) >= 0) {
-    Serial.println("[ota] riavvio dopo aggiornamento firmware");
+    Serial.println("[ota] rebooting after firmware update");
     delay(50);
     ESP.restart();
   }

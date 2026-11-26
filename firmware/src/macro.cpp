@@ -11,7 +11,7 @@ static bool s_begun = false;
 static void (*s_on_done)(const char*) = nullptr;
 
 // ---------------------------------------------------------------------------
-// Struttura step e parser (usato sia al salvataggio sia all'esecuzione)
+// Step structure and parser (used on both save and playback)
 // ---------------------------------------------------------------------------
 
 struct Step {
@@ -50,7 +50,7 @@ static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
       st.wait = o["w"] | 0;
       if (st.wait > MACRO_MAX_WAIT_MS) st.wait = MACRO_MAX_WAIT_MS;
     } else {
-      return false; // step senza chiave nota
+      return false; // step without a known key
     }
     out.push_back(st);
   }
@@ -58,9 +58,9 @@ static bool parse_steps(JsonArrayConst src, std::vector<Step>& out) {
 }
 
 // ---------------------------------------------------------------------------
-// Storage: ogni macro e' un blob JSON degli steps sotto la chiave = id.
-// L'elenco degli id sta in MACRO_IDX_KEY come array JSON (perche' la lib
-// Preferences non espone l'enumerazione delle chiavi).
+// Storage: each macro is a JSON blob of steps stored under key = id.
+// The ID list is kept in MACRO_IDX_KEY as a JSON array (since Preferences
+// does not expose key enumeration).
 // ---------------------------------------------------------------------------
 
 static bool load_index(JsonDocument& d) {
@@ -94,7 +94,7 @@ void macro_fill_ids(JsonArray arr) {
   if (!load_index(idx)) return;
   for (JsonVariant v : idx.as<JsonArray>()) {
     const char* id = v | "";
-    // filtra eventuali orfani (blob assente) o id non validi
+    // filter out orphans (missing blob) or invalid IDs
     if (macro_valid_id(id) && s_prefs.isKey(id)) arr.add(id);
   }
 }
@@ -116,7 +116,7 @@ void macro_set_on_done(void (*cb)(const char* id)) {
 bool macro_save(const char* id, JsonArrayConst steps) {
   if (!s_begun || !macro_valid_id(id)) return false;
 
-  // Valida il formato degli step prima di scrivere in NVS
+  // Validate step format before writing to NVS
   std::vector<Step> parsed;
   if (!parse_steps(steps, parsed)) return false;
 
@@ -159,7 +159,7 @@ bool macro_del(const char* id) {
 }
 
 // ---------------------------------------------------------------------------
-// Player non-bloccante (avanzato esclusivamente da loopTask)
+// Non-blocking player (advanced exclusively from loopTask)
 // ---------------------------------------------------------------------------
 
 static bool s_running = false;
@@ -168,7 +168,7 @@ static std::vector<Step> s_steps;
 static size_t s_idx = 0;
 static size_t s_textPos = 0;
 
-// micro-fasi di esecuzione: giu' -> attesa -> su -> attesa -> step successivo
+// Playback micro-phases: down -> wait -> up -> wait -> next step
 enum Phase { P_IDLE, P_KEY_DOWN, P_CONSUMER_DOWN, P_TEXT, P_CHAR_DOWN };
 static Phase s_phase = P_IDLE;
 static bool s_waiting = false;
@@ -213,8 +213,8 @@ bool macro_start(const char* id) {
 
 static size_t s_textCurConsumed = 1;
 
-// Esegue un tasto tap in due micro-fasi (down / up) con report dedicati:
-// non altera lo stato 6KRO interattivo, usa report diretti.
+// Execute a key tap in two micro-phases (down / up) with direct reports:
+// does not alter interactive 6KRO state.
 static void player_report_key(uint8_t code, uint8_t mods, bool down) {
   uint8_t keys[6] = {0};
   if (down && code != 0) keys[0] = code;
@@ -226,13 +226,13 @@ void macro_tick() {
 
   const uint32_t now = millis();
 
-  // attesa in corso? (confronto signed immune al wraparound di millis())
+  // Wait in progress? (signed diff is immune to millis() wraparound)
   if (s_waiting) {
     if (static_cast<int32_t>(now - s_deadline) < 0) return;
     s_waiting = false;
   }
 
-  // Completamento controllato DOPO l'eventuale attesa finale (incluso Step::WAIT finale)
+  // Completion checked AFTER any trailing wait (including a final Step::WAIT)
   if (s_idx >= s_steps.size()) {
     s_running = false;
     s_waiting = false;
@@ -276,7 +276,7 @@ void macro_tick() {
       player_report_key(0, 0, false);
       s_phase = P_IDLE;
       s_idx++;
-      schedule_wait(now, 16); // pausa rilascio + gap tra step
+      schedule_wait(now, 16); // release pause + inter-step gap
       return;
 
     case P_CONSUMER_DOWN:
@@ -287,7 +287,7 @@ void macro_tick() {
       return;
 
     case P_TEXT:
-      // salta eventuali caratteri non mappati senza stallo
+      // skip unmapped characters without stalling
       while (s_textPos < st.text.length()) {
         size_t consumed = 1;
         uint8_t usage = 0;
@@ -302,7 +302,7 @@ void macro_tick() {
         }
         s_textPos += consumed;
       }
-      // testo terminato
+      // text completed
       s_phase = P_IDLE;
       s_idx++;
       return;
@@ -311,7 +311,7 @@ void macro_tick() {
       player_report_key(0, 0, false);
       s_textPos += s_textCurConsumed;
       s_phase = P_TEXT;
-      schedule_wait(now, 12); // rilascio + gap tra caratteri
+      schedule_wait(now, 12); // release + inter-character gap
       return;
   }
 }

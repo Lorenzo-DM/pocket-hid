@@ -10,8 +10,8 @@
 #include "macro_id.h"
 #include "config.h"
 
-// Macro di asserzione compatibile sia con PlatformIO Unity sia con compilazione
-// diretta via g++/clang++ (senza dipendenze esterne).
+// Assertion macros compatible with both PlatformIO Unity and direct
+// g++/clang++ compilation (no external dependencies).
 #ifdef PIO_UNIT_TESTING
 #define EXPECT_TRUE(cond)       TEST_ASSERT_TRUE(cond)
 #define EXPECT_FALSE(cond)      TEST_ASSERT_FALSE(cond)
@@ -52,7 +52,7 @@ static void test_keymap_basic() {
   EXPECT_EQ(0x1D, u);
   EXPECT_TRUE(sh);
 
-  // '1' deve rimanere non-shifted (regressione del dead code rimosso)
+  // '1' must remain unshifted (regression check)
   EXPECT_TRUE(keymap_char('1', &u, &sh));
   EXPECT_EQ(0x1E, u);
   EXPECT_FALSE(sh);
@@ -81,7 +81,7 @@ static void test_keymap_basic() {
   EXPECT_EQ(0x2C, u);
   EXPECT_FALSE(sh);
 
-  // Non-ASCII / non mappati e puntatori nulli
+  // Non-ASCII / unmapped characters and null pointers
   EXPECT_FALSE(keymap_char('\xE0', &u, &sh));
   EXPECT_FALSE(keymap_char('\x00', &u, &sh));
   EXPECT_FALSE(keymap_char('a', nullptr, &sh));
@@ -100,7 +100,7 @@ static void test_keymap_it_utf8() {
   uint8_t u = 0;
   uint8_t m = 0;
 
-  // Simboli IT specifici: '-', '/', '@', '{', '<', '>'
+  // IT-specific symbols: '-', '/', '@', '{', '<', '>'
   EXPECT_TRUE(keymap_next_utf8("-", 1, &consumed, &u, &m));
   EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x38, u); EXPECT_EQ(0x00, m);
 
@@ -116,7 +116,7 @@ static void test_keymap_it_utf8() {
   EXPECT_TRUE(keymap_next_utf8("<", 1, &consumed, &u, &m));
   EXPECT_EQ(size_t{1}, consumed); EXPECT_EQ(0x64, u); EXPECT_EQ(0x00, m);
 
-  // Accenti UTF-8 (2 byte): à (C3 A0), è (C3 A8), é (C3 A9), ù (C3 B9)
+  // UTF-8 accents (2 bytes): à (C3 A0), è (C3 A8), é (C3 A9), ù (C3 B9)
   const char* agrave = "\xC3\xA0";
   EXPECT_TRUE(keymap_next_utf8(agrave, 2, &consumed, &u, &m));
   EXPECT_EQ(size_t{2}, consumed); EXPECT_EQ(0x34, u); EXPECT_EQ(0x00, m);
@@ -125,17 +125,17 @@ static void test_keymap_it_utf8() {
   EXPECT_TRUE(keymap_next_utf8(eacute, 2, &consumed, &u, &m));
   EXPECT_EQ(size_t{2}, consumed); EXPECT_EQ(0x2F, u); EXPECT_EQ(HID_MOD_LSHIFT, m);
 
-  // Euro UTF-8 (3 byte): € (E2 82 AC) -> AltGr + E (0x08)
+  // Euro UTF-8 (3 bytes): € (E2 82 AC) -> AltGr + E (0x08)
   const char* euro = "\xE2\x82\xAC";
   EXPECT_TRUE(keymap_next_utf8(euro, 3, &consumed, &u, &m));
   EXPECT_EQ(size_t{3}, consumed); EXPECT_EQ(0x08, u); EXPECT_EQ(HID_MOD_ALTGR, m);
 
-  // Emoji 4 byte: saltata consumando tutti e 4 i byte
+  // 4-byte emoji: skipped while consuming all 4 bytes
   const char* emoji = "\xF0\x9F\x98\x80";
   EXPECT_FALSE(keymap_next_utf8(emoji, 4, &consumed, &u, &m));
   EXPECT_EQ(size_t{4}, consumed);
 
-  // Ripristina US
+  // Restore US
   keymap_set_layout(KeyLayout::US);
 }
 
@@ -146,40 +146,40 @@ static void test_keymap_it_utf8() {
 static void test_kb_state_6kro() {
   KbState kb;
 
-  // Nessun tasto ne' modificatore -> rifiutato
+  // Neither key nor modifier -> rejected
   EXPECT_FALSE(kb.key_down(0, 0));
 
-  // AltGr (Right Alt = 0x40) supportato per layout IT
+  // AltGr (Right Alt = 0x40) supported for IT layout
   EXPECT_TRUE(kb.key_down(0x33, 0x40));
   EXPECT_EQ(0x40, kb.mods);
   kb.key_up(0x33, 0x40);
   EXPECT_EQ(0x00, kb.mods);
 
-  // Solo modificatore (es. Win/Super = 0x08)
+  // Modifier-only (e.g. Win/Super = 0x08)
   EXPECT_TRUE(kb.key_down(0, 0x08));
   EXPECT_EQ(0x08, kb.mods);
   kb.key_up(0, 0x08);
   EXPECT_EQ(0x00, kb.mods);
 
-  // 6 tasti contemporanei: tutti accettati
+  // 6 simultaneous keys: all accepted
   for (uint8_t i = 0; i < 6; ++i) {
     EXPECT_TRUE(kb.key_down(static_cast<uint8_t>(0x04 + i), 0));
   }
-  // Duplicato gia' premuto: idempotente (accettato)
+  // Duplicate already pressed: idempotent (accepted)
   EXPECT_TRUE(kb.key_down(0x04, 0x01));
   EXPECT_EQ(0x01, kb.mods);
 
-  // 7° tasto distinto: rifiutato (6KRO)
+  // 7th distinct key: rejected (6KRO)
   EXPECT_FALSE(kb.key_down(0x0A, 0));
 
-  // Rilascio di uno slot e riutilizzo
+  // Release one slot and reuse it
   kb.key_up(0x06, 0x01);
   EXPECT_EQ(0x00, kb.mods);
   EXPECT_TRUE(kb.find_key(0x06) < 0);
   EXPECT_TRUE(kb.key_down(0x0A, 0));
   EXPECT_TRUE(kb.find_key(0x0A) >= 0);
 
-  // Clear completo
+  // Full clear
   kb.clear();
   EXPECT_EQ(0x00, kb.mods);
   for (int i = 0; i < 6; ++i) {
@@ -194,16 +194,16 @@ static void test_kb_state_6kro() {
 static void test_macro_valid_id() {
   EXPECT_TRUE(macro_valid_id("netflix"));
   EXPECT_TRUE(macro_valid_id("A_b-09"));
-  EXPECT_TRUE(macro_valid_id("12345678901234567890")); // 20 char esatti
+  EXPECT_TRUE(macro_valid_id("12345678901234567890")); // exact 20 chars
 
   EXPECT_FALSE(macro_valid_id(nullptr));
   EXPECT_FALSE(macro_valid_id(""));
-  EXPECT_FALSE(macro_valid_id("123456789012345678901")); // 21 char (> max)
+  EXPECT_FALSE(macro_valid_id("123456789012345678901")); // 21 chars (> max)
   EXPECT_FALSE(macro_valid_id("bad id"));
   EXPECT_FALSE(macro_valid_id("bad/id"));
   EXPECT_FALSE(macro_valid_id("bad.id"));
 
-  // Chiave riservata dell'indice NVS: deve essere sempre rifiutata
+  // Reserved NVS index key: must always be rejected
   EXPECT_FALSE(macro_valid_id("__idx"));
 }
 

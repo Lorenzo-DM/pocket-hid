@@ -23,7 +23,7 @@ bool KbState::key_down(uint8_t code, uint8_t mod_mask) {
         break;
       }
     }
-    if (slot < 0) return false; // 7° tasto: ignorato (6KRO)
+    if (slot < 0) return false; // 7th key: ignored (6KRO)
     keys[slot] = code;
   }
   mods |= mod_mask;

@@ -1,7 +1,7 @@
 #include "keymap.h"
 #include <string.h>
 
-// HID usage codes tastiera (page 0x07)
+// Keyboard HID usage codes (page 0x07)
 #define K_A     0x04
 #define K_E     0x08
 #define K_ONE   0x1E
@@ -20,7 +20,7 @@
 #define K_COMMA 0x36
 #define K_DOT   0x37
 #define K_SLASH 0x38
-#define K_ISO   0x64 // Tasto ISO a sinistra della Z (< > su tastiera IT)
+#define K_ISO   0x64 // ISO key left of Z (< > on IT keyboard)
 
 static KeyLayout s_layout = KeyLayout::US;
 
@@ -113,7 +113,7 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case '\n': *usage = K_ENTER; return true;
     case '\t': *usage = K_TAB;   return true;
 
-    // Riga numeri (Shift)
+    // Number row (Shift)
     case '!':    *usage = K_ONE;     *mods = HID_MOD_LSHIFT; return true;
     case '"':    *usage = K_ONE + 1; *mods = HID_MOD_LSHIFT; return true;
     case 0x00A3: *usage = K_ONE + 2; *mods = HID_MOD_LSHIFT; return true; // £
@@ -125,11 +125,11 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case ')':    *usage = K_ONE + 8; *mods = HID_MOD_LSHIFT; return true;
     case '=':    *usage = K_ZERO;    *mods = HID_MOD_LSHIFT; return true;
 
-    // Tasto a sinistra dell'1 (\ |)
+    // Key left of 1 (\ |)
     case '\\':   *usage = K_GRAVE; return true;
     case '|':    *usage = K_GRAVE; *mods = HID_MOD_LSHIFT; return true;
 
-    // Tasti a destra dello 0 (' ? `  e  ì ^ ~)
+    // Keys right of 0 (' ? ` and ì ^ ~)
     case '\'':   *usage = K_MINUS; return true;
     case '?':    *usage = K_MINUS; *mods = HID_MOD_LSHIFT; return true;
     case '`':    *usage = K_MINUS; *mods = HID_MOD_ALTGR;  return true;
@@ -137,7 +137,7 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case '^':    *usage = K_EQUAL; *mods = HID_MOD_LSHIFT; return true;
     case '~':    *usage = K_EQUAL; *mods = HID_MOD_ALTGR;  return true;
 
-    // Tasti a destra della P (è é [ {  e  + * ] })
+    // Keys right of P (è é [ { and + * ] })
     case 0x00E8: *usage = K_LBR; return true; // è
     case 0x00E9: *usage = K_LBR; *mods = HID_MOD_LSHIFT; return true; // é
     case '[':    *usage = K_LBR; *mods = HID_MOD_ALTGR;  return true;
@@ -147,7 +147,7 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case ']':    *usage = K_RBR; *mods = HID_MOD_ALTGR;  return true;
     case '}':    *usage = K_RBR; *mods = HID_MOD_LSHIFT | HID_MOD_ALTGR; return true;
 
-    // Tasti a destra della L (ò ç @, à ° #, ù §)
+    // Keys right of L (ò ç @, à ° #, ù §)
     case 0x00F2: *usage = K_SEMI; return true; // ò
     case 0x00E7: *usage = K_SEMI; *mods = HID_MOD_LSHIFT; return true; // ç
     case '@':    *usage = K_SEMI; *mods = HID_MOD_ALTGR;  return true;
@@ -157,7 +157,7 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case 0x00F9: *usage = K_BSLH; return true; // ù
     case 0x00A7: *usage = K_BSLH; *mods = HID_MOD_LSHIFT; return true; // §
 
-    // Tasti a destra della M (, ;  . :  - _)
+    // Keys right of M (, ;  . :  - _)
     case ',':    *usage = K_COMMA; return true;
     case ';':    *usage = K_COMMA; *mods = HID_MOD_LSHIFT; return true;
     case '.':    *usage = K_DOT;   return true;
@@ -165,7 +165,7 @@ static bool map_it(uint32_t cp, uint8_t* usage, uint8_t* mods) {
     case '-':    *usage = K_SLASH; return true;
     case '_':    *usage = K_SLASH; *mods = HID_MOD_LSHIFT; return true;
 
-    // Tasto ISO a sinistra della Z (< >)
+    // ISO key left of Z (< >)
     case '<':    *usage = K_ISO; return true;
     case '>':    *usage = K_ISO; *mods = HID_MOD_LSHIFT; return true;
 
@@ -200,10 +200,10 @@ bool keymap_next_utf8(const char* str, size_t len, size_t* consumed, uint8_t* us
              && (static_cast<uint8_t>(str[2]) & 0xC0) == 0x80
              && (static_cast<uint8_t>(str[3]) & 0xC0) == 0x80) {
     *consumed = 4;
-    return false; // emoji / piano supplementare: non mappati
+    return false; // emoji / supplementary plane: unmapped
   } else {
     *consumed = 1;
-    return false; // byte UTF-8 non valido
+    return false; // invalid UTF-8 byte
   }
 
   return (s_layout == KeyLayout::IT) ? map_it(cp, usage, mods) : map_us(cp, usage, mods);

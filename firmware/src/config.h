@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <string.h>
 
-// Configurazione PocketHID
-// Le credenziali reali NON si committano: mettile in config_local.h (gitignored)
-// oppure passale via -D in build_flags
+// PocketHID configuration
+// Never commit real credentials: put them in config_local.h (gitignored)
+// or pass them via -D in build_flags.
 #if __has_include("config_local.h")
 #include "config_local.h"
 #endif
@@ -19,13 +19,13 @@
 // BLE
 #define MK_BLE_NAME "PocketHID"
 
-// Hotspot (AP) captive portal: WPA2, min 8 caratteri.
-// SSID effettivo: <MK_AP_BASE_SSID>-XXXX (ultimi byte MAC)
+// Captive portal hotspot (AP): WPA2, min 8 characters.
+// Actual SSID: <MK_AP_BASE_SSID>-XXXX (last 2 MAC bytes)
 #define MK_AP_BASE_SSID "PocketHID"
 #define MK_AP_PASS      "pockethid1"
 
-// Credenziali WiFi di default (placeholder per il repo):
-// creare firmware/src/config_local.h con i valori reali, vedi config_local.h.example
+// Default WiFi credentials (repo placeholders):
+// create firmware/src/config_local.h with real values, see config_local.h.example
 #ifndef WIFI_SSID
 #define WIFI_SSID "YOUR_WIFI_SSID"
 #endif
@@ -33,8 +33,8 @@
 #define WIFI_PASS "YOUR_WIFI_PASSWORD"
 #endif
 
-// Token opzionale per WebSocket, OTA (/update) e config WiFi (/save).
-// Vuoto = nessuna auth (solo per rete locale fidata / test iniziali).
+// Optional auth token for WebSocket, OTA (/update), and WiFi setup (/save).
+// Empty = no auth (trusted local network / initial testing only).
 #ifndef MK_TOKEN
 #define MK_TOKEN ""
 #endif
@@ -44,7 +44,7 @@ inline bool mk_token_enabled() {
   return expected[0] != '\0';
 }
 
-// Confronto costante in tempo per verificare il token configurato.
+// Constant-time comparison to validate the configured token.
 inline bool mk_token_valid(const char* candidate) {
   if (!mk_token_enabled()) return true;
   if (!candidate) return false;

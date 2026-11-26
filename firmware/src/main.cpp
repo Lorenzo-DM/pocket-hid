@@ -9,11 +9,11 @@
 #include "wifi_mgr.h"
 
 void setup() {
-  // USB TinyUSB: l'ordine e' importante —
-  // 1) TinyUSBDevice.begin() alloca i buffer dei descrittori
-  // 2) usb_hid_begin() aggiunge le interfacce HID
-  // 3) USB.begin() avvia lo stack TinyUSB del core, che serve i descrittori
-  //    tramite i callback strong di Adafruit (tud_descriptor_*_cb)
+  // TinyUSB initialization order matters:
+  // 1) TinyUSBDevice.begin() allocates descriptor buffers
+  // 2) usb_hid_begin() registers HID interfaces
+  // 3) USB.begin() starts the core TinyUSB stack, serving descriptors
+  //    through Adafruit's strong callbacks (tud_descriptor_*_cb)
   TinyUSBDevice.begin();
   usb_hid_begin();
   USB.begin();
@@ -23,18 +23,18 @@ void setup() {
   Serial.printf("\n[main] PocketHID firmware %s\n", MK_FW_VERSION);
   Serial.printf("[main] USB HID init, mounted=%d\n", usb_hid_mounted());
 
-  // Coda comandi + NVS macro: va inizializzata prima dei trasporti (BLE / WS)
+  // Command queue + NVS macros: must be initialized before transports (BLE / WS)
   commands_init();
 
-  // WiFi: STA (NVS o config compilata) + AP captive portal + mDNS
+  // WiFi: STA (NVS or compiled config) + AP captive portal + mDNS
   wifi_begin();
 
-  // BLE GATT custom (pairing cifrato obbligatorio)
+  // Custom BLE GATT service (mandatory encrypted pairing)
   ble_server_begin();
 
-  // WebSocket + HTTP API + OTA + PWA LittleFS
+  // WebSocket + HTTP API + OTA + LittleFS PWA
   ws_server_begin(MK_WS_PORT);
-  Serial.printf("[main] WebSocket server su porta %d\n", MK_WS_PORT);
+  Serial.printf("[main] WebSocket server listening on port %d\n", MK_WS_PORT);
 }
 
 void loop() {
@@ -42,9 +42,9 @@ void loop() {
   TinyUSBDevice.task();
 #endif
   ws_server_loop();
-  wifi_loop(); // DNS captive portal, eventi WiFi, mDNS, riconnessione, reboot
+  wifi_loop(); // Captive portal DNS, WiFi events, mDNS, reconnect, reboot
   const bool busy = commands_tick();
 
-  // Quando ci sono comandi/text/macro attivi usa tick da 1 ms per latenza minima
+  // Use 1 ms tick for minimum latency while commands/text/macros are active
   delay(busy ? 1 : 10);
 }

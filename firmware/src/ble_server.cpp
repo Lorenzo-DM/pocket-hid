@@ -9,13 +9,13 @@
 #include "config.h"
 #include "commands.h"
 
-// UUID custom (non-standard): app lo usa come fingerprint nello scan
+// Custom (non-standard) UUIDs: used by the app as a scan fingerprint
 #define MK_BLE_SVC "7a0c1000-8b6d-4d3f-9a2e-5f1c2b3d4e5f"
 #define MK_BLE_RX  "7a0c1001-8b6d-4d3f-9a2e-5f1c2b3d4e5f" // app -> ESP (write)
 #define MK_BLE_TX  "7a0c1002-8b6d-4d3f-9a2e-5f1c2b3d4e5f" // ESP -> app (notify)
 
-// Il GATT non fa streaming: un messaggio JSON arriva in una o piu' write.
-// Cap 2560 B: contiene anche macro_save al limite (2048 B blob + wrapper JSON).
+// GATT is not a byte stream: a JSON message arrives in one or more writes.
+// 2560 B cap holds a max-size macro_save (2048 B blob + JSON wrapper).
 static constexpr size_t BLE_RX_BUF_MAX = 2560;
 static constexpr size_t BLE_MAX_PEERS = 3;
 
@@ -34,7 +34,7 @@ static SemaphoreHandle_t s_peersMux = nullptr;
 static SemaphoreHandle_t s_txMux = nullptr;
 
 // ---------------------------------------------------------------------------
-// Tabella peer per-handle (thread-safe tra nimble_host e loopTask)
+// Per-handle peer table (thread-safe between nimble_host and loopTask)
 // ---------------------------------------------------------------------------
 
 static BlePeer* find_peer_locked(uint16_t handle) {
@@ -111,7 +111,7 @@ static uint16_t peer_get_mtu(uint16_t handle, bool minAll) {
 }
 
 // ---------------------------------------------------------------------------
-// Invio TX (chunking automatico oltre MTU-3, compatibile con BleBase)
+// TX notifications (automatic chunking beyond MTU-3, compatible with BleBase)
 // ---------------------------------------------------------------------------
 
 static void send_notify_chunked(uint16_t handle, bool broadcast, const char* json) {
@@ -144,7 +144,7 @@ static void send_error_reply(uint16_t handle, const char* msg) {
 }
 
 // ---------------------------------------------------------------------------
-// Callback NimBLE (istanze statiche: nessuna allocazione su heap)
+// NimBLE callbacks (static instances: no heap allocations)
 // ---------------------------------------------------------------------------
 
 class ServerCb : public NimBLEServerCallbacks {
@@ -152,14 +152,14 @@ class ServerCb : public NimBLEServerCallbacks {
     const uint16_t handle = info.getConnHandle();
     peer_add(handle);
     const int n = s_clients.fetch_add(1, std::memory_order_acq_rel) + 1;
-    Serial.printf("[ble] connect (handle %u, totale %d)\n", handle, n);
-    // interval 7.5-15ms per mouse fluido, latency 0, timeout 4s
+    Serial.printf("[ble] connect (handle %u, total %d)\n", handle, n);
+    // 7.5-15ms connection interval for smooth mouse, latency 0, timeout 4s
     server->updateConnParams(handle, 6, 12, 0, 400);
   }
 
   void onMTUChange(uint16_t MTU, NimBLEConnInfo& info) override {
     peer_set_mtu(info.getConnHandle(), MTU);
-    Serial.printf("[ble] MTU aggiornato (handle %u): %u\n", info.getConnHandle(), MTU);
+    Serial.printf("[ble] MTU updated (handle %u): %u\n", info.getConnHandle(), MTU);
   }
 
   void onDisconnect(NimBLEServer*, NimBLEConnInfo& info, int) override {
@@ -171,7 +171,7 @@ class ServerCb : public NimBLEServerCallbacks {
     if (wasHello) {
       commands_enqueue_input_clear();
     }
-    Serial.printf("[ble] disconnect (handle %u, totale %d), riparto con advertising\n", handle, cur);
+    Serial.printf("[ble] disconnect (handle %u, total %d), restarting advertising\n", handle, cur);
     NimBLEDevice::getAdvertising()->start();
   }
 };
@@ -179,9 +179,9 @@ class ServerCb : public NimBLEServerCallbacks {
 class RxCb : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* ch, NimBLEConnInfo& info) override {
     const uint16_t handle = info.getConnHandle();
-    // Difesa in profondita': accetta comandi solo su link BLE cifrato
+    // Defense in depth: accept commands only over an encrypted BLE link
     if (!info.isEncrypted()) {
-      Serial.printf("[ble] write rifiutata (handle %u): connessione non cifrata\n", handle);
+      Serial.printf("[ble] write rejected (handle %u): unencrypted connection\n", handle);
       return;
     }
 
@@ -210,17 +210,17 @@ class RxCb : public NimBLECharacteristicCallbacks {
     if (!hasPeer) return;
     if (overflow) {
       Serial.printf("[ble] rx overflow (handle %u), reset buffer\n", handle);
-      send_error_reply(handle, "buffer BLE overflow");
+      send_error_reply(handle, "BLE buffer overflow");
       return;
     }
 
     JsonDocument doc;
     const DeserializationError err = deserializeJson(doc, snapshot.data(), snapshot.size());
     if (err == DeserializationError::IncompleteInput) {
-      return; // attende chunk successivo
+      return; // wait for next chunk
     }
 
-    // Parse concluso (valido o errore definitivo): pulisce il buffer RX
+    // Parse complete (valid or final error): clear RX buffer
     bool helloDone = false;
     if (s_peersMux && xSemaphoreTake(s_peersMux, portMAX_DELAY) == pdTRUE) {
       BlePeer* p = find_peer_locked(handle);
@@ -232,7 +232,7 @@ class RxCb : public NimBLECharacteristicCallbacks {
     }
 
     if (err || !doc.is<JsonObject>()) {
-      send_error_reply(handle, "json non valido su BLE");
+      send_error_reply(handle, "invalid JSON over BLE");
       return;
     }
 
@@ -241,7 +241,7 @@ class RxCb : public NimBLECharacteristicCallbacks {
     if (!strcmp(t, "hello")) {
       const int v = doc["v"] | 0;
       if (v != 1) {
-        send_error_reply(handle, "versione protocollo non compatibile");
+        send_error_reply(handle, "unsupported protocol version");
         return;
       }
       if (s_peersMux && xSemaphoreTake(s_peersMux, portMAX_DELAY) == pdTRUE) {
@@ -250,17 +250,17 @@ class RxCb : public NimBLECharacteristicCallbacks {
         xSemaphoreGive(s_peersMux);
       }
       if (!commands_enqueue_welcome(Transport::BLE, handle)) {
-        send_error_reply(handle, "coda comandi piena");
+        send_error_reply(handle, "command queue full");
       }
       return;
     }
 
     if (!helloDone) {
-      send_error_reply(handle, "autenticazione richiesta (inviare hello)");
+      send_error_reply(handle, "authentication required (send hello)");
       return;
     }
 
-    // Hot-path zero-malloc per mouse/scroll
+    // Hot-path zero-malloc for mouse/scroll
     if (!strcmp(t, "mouse")) {
       commands_enqueue_mouse(static_cast<int16_t>(doc["dx"] | 0),
                              static_cast<int16_t>(doc["dy"] | 0));
@@ -273,7 +273,7 @@ class RxCb : public NimBLECharacteristicCallbacks {
     }
 
     if (!commands_enqueue_json(Transport::BLE, handle, snapshot.data(), snapshot.size())) {
-      send_error_reply(handle, "coda comandi piena");
+      send_error_reply(handle, "command queue full");
     }
   }
 };
@@ -282,7 +282,7 @@ static ServerCb s_serverCb;
 static RxCb s_rxCb;
 
 // ---------------------------------------------------------------------------
-// API pubblica
+// Public API
 // ---------------------------------------------------------------------------
 
 void ble_server_begin() {
@@ -293,8 +293,8 @@ void ble_server_begin() {
 
   NimBLEDevice::init(MK_BLE_NAME);
   NimBLEDevice::setMTU(247);
-  // bonding + secure connections; IO "nessuno" = pairing "Just Works":
-  // la cifratura (ENC) arriva col pairing, il MITM no (serve display/KB)
+  // Bonding + Secure Connections; IO "none" = Just Works pairing:
+  // encryption (ENC) is enforced via pairing, MITM is off (no display/KB).
   NimBLEDevice::setSecurityAuth(true, false, true);
   NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
@@ -303,12 +303,12 @@ void ble_server_begin() {
 
   NimBLEService* svc = server->createService(MK_BLE_SVC);
 
-  // TX: notify verso l'app (il link e' gia' cifrato dal pairing richiesto su RX)
+  // TX: notify to app (link is already encrypted via pairing required on RX)
   s_tx = svc->createCharacteristic(
       MK_BLE_TX,
       NIMBLE_PROPERTY::NOTIFY);
 
-  // RX: write (con e senza risposta per il mouse fire-and-forget), cifrata
+  // RX: encrypted write (with and without response for fire-and-forget mouse)
   NimBLECharacteristic* rx = svc->createCharacteristic(
       MK_BLE_RX,
       NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::WRITE_ENC);
@@ -321,11 +321,11 @@ void ble_server_begin() {
   adv->setName(MK_BLE_NAME);
   adv->start();
 
-  Serial.printf("[ble] advertising attivo: \"%s\"\n", MK_BLE_NAME);
+  Serial.printf("[ble] advertising active: \"%s\"\n", MK_BLE_NAME);
 }
 
 void ble_server_loop() {
-  // NimBLE gestisce gli eventi in task proprio; nessuna azione necessaria.
+  // NimBLE handles events on its own task; nothing to do here.
 }
 
 int ble_server_client_count() {

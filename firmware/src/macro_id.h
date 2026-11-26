@@ -11,7 +11,7 @@
 #define MACRO_MAX_WAIT_MS 60000
 #define MACRO_IDX_KEY     "__idx"
 
-// Validazione ID macro: [a-zA-Z0-9_-], 1..MACRO_MAX_ID, esclude la chiave indice NVS.
+// Macro ID validation: [a-zA-Z0-9_-], 1..MACRO_MAX_ID, excludes NVS index key.
 inline bool macro_valid_id(const char* id) {
   if (!id) return false;
   const size_t n = strlen(id);

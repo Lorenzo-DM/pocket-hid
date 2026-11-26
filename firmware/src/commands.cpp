@@ -14,8 +14,8 @@
 #include "ble_server.h"
 
 // ---------------------------------------------------------------------------
-// Coda FreeRTOS: ponte thread-safe tra trasporti (async_tcp / nimble_host)
-// e loopTask (unico owner di USB HID, KbState, NVS/macro).
+// FreeRTOS queue: thread-safe bridge between transports (async_tcp / nimble_host)
+// and loopTask (sole owner of USB HID, KbState, NVS/macros).
 // ---------------------------------------------------------------------------
 
 static constexpr size_t CMD_QUEUE_LEN = 48;
@@ -41,16 +41,16 @@ struct QueuedEvent {
 
 static QueueHandle_t s_queue = nullptr;
 
-// Canali di uscita verso i trasporti
+// Outgoing transport channels
 static TransportSendFn s_ws_send = nullptr;
 static BroadcastFn s_ws_bc = nullptr;
 static TransportSendFn s_ble_send = nullptr;
 static BroadcastFn s_ble_bc = nullptr;
 
-// Stato tastiera 6KRO (usato esclusivamente da loopTask)
+// 6KRO keyboard state (used exclusively by loopTask)
 static KbState s_kb;
 
-// Rilasci temporizzati non-bloccanti (tutti su loopTask)
+// Non-blocking timed releases (all on loopTask)
 struct PendingKbRelease {
   bool active = false;
   uint8_t code = 0;
@@ -73,7 +73,7 @@ static PendingKbRelease s_kbRel;
 static PendingMbtnRelease s_mbtnRel;
 static PendingConsumerRelease s_conRel;
 
-// Coda non-bloccante per il comando "text"
+// Non-blocking queue for the "text" command
 enum TextPhase : uint8_t { TP_IDLE = 0, TP_DOWN, TP_GAP };
 static std::string s_textBuf;
 static size_t s_textPos = 0;
@@ -84,7 +84,7 @@ static size_t s_textCurConsumed = 1;
 static uint32_t s_textDeadline = 0;
 
 // ---------------------------------------------------------------------------
-// Utility invio risposte
+// Reply helpers
 // ---------------------------------------------------------------------------
 
 static void reply_raw(Transport src, uint32_t peerId, const char* json) {
@@ -119,7 +119,7 @@ static void fill_status_fields(JsonDocument& d, const char* type) {
   macro_fill_ids(macros);
 }
 
-// callback dal player macro (contesto loopTask): broadcast a tutti i trasporti
+// Callback from macro player (loopTask context): broadcast to all transports
 static void on_macro_done(const char* id) {
   JsonDocument d;
   d["t"] = "macro_done";
@@ -131,7 +131,7 @@ static void on_macro_done(const char* id) {
 }
 
 // ---------------------------------------------------------------------------
-// Setup & configurazione trasporti
+// Setup & transport registration
 // ---------------------------------------------------------------------------
 
 void commands_set_ws_transport(TransportSendFn send, BroadcastFn broadcast) {
@@ -162,7 +162,7 @@ void commands_init() {
 }
 
 // ---------------------------------------------------------------------------
-// API thread-safe di accodamento (chiamate da async_tcp / nimble_host)
+// Thread-safe enqueue API (called from async_tcp / nimble_host)
 // ---------------------------------------------------------------------------
 
 static bool push_event(const QueuedEvent& ev) {
@@ -221,7 +221,7 @@ bool commands_enqueue_json(Transport src, uint32_t peerId, const char* data, siz
 }
 
 // ---------------------------------------------------------------------------
-// Azioni HID non-bloccanti (eseguite esclusivamente su loopTask)
+// Non-blocking HID actions (executed exclusively on loopTask)
 // ---------------------------------------------------------------------------
 
 static int8_t clamp_i8(int32_t v) {
@@ -284,7 +284,7 @@ static void handle_key(JsonObject o, uint32_t now) {
       s_kb.key_up(code, mods);
       return;
     }
-    // Solo modificatore (es. Win/Super): durata maggiore per polling HID (5 ms)
+    // Modifier-only (e.g. Win/Super): longer hold for 5 ms HID polling
     s_kbRel.active = true;
     s_kbRel.code = code;
     s_kbRel.mods = mods;
@@ -332,7 +332,7 @@ static void handle_mbtn(JsonObject o, uint32_t now) {
 static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint32_t now) {
   JsonDocument doc;
   if (deserializeJson(doc, raw) != DeserializationError::Ok || !doc.is<JsonObject>()) {
-    reply_error(src, peerId, "json non valido");
+    reply_error(src, peerId, "invalid JSON");
     return;
   }
 
@@ -358,7 +358,7 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
   } else if (!strcmp(t, "layout")) {
     KeyLayout nextLayout;
     if (!keymap_parse_layout(o["layout"] | "", &nextLayout)) {
-      reply_error(src, peerId, "layout non supportato (usa 'us' o 'it')");
+      reply_error(src, peerId, "unsupported layout (use 'us' or 'it')");
       return;
     }
     keymap_set_layout(nextLayout);
@@ -375,17 +375,17 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
     if (s_ble_bc) s_ble_bc(out.c_str());
   } else if (!strcmp(t, "macro_run")) {
     if (macro_running()) {
-      reply_error(src, peerId, "macro gia' in esecuzione");
+      reply_error(src, peerId, "macro already running");
       return;
     }
     const char* id = o["id"] | "";
     if (!macro_start(id)) {
-      reply_error(src, peerId, "macro inesistente o non avviabile");
+      reply_error(src, peerId, "macro not found or cannot start");
     }
   } else if (!strcmp(t, "macro_save")) {
     const char* id = o["id"] | "";
     if (!macro_save(id, o["steps"].as<JsonArrayConst>())) {
-      reply_error(src, peerId, "operazione macro non riuscita (id/steps non validi o limiti superati)");
+      reply_error(src, peerId, "macro operation failed (invalid id/steps or limit exceeded)");
       return;
     }
     JsonDocument d;
@@ -394,7 +394,7 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
   } else if (!strcmp(t, "macro_del")) {
     const char* id = o["id"] | "";
     if (!macro_del(id)) {
-      reply_error(src, peerId, "operazione macro non riuscita (id/steps non validi o limiti superati)");
+      reply_error(src, peerId, "macro operation failed (invalid id/steps or limit exceeded)");
       return;
     }
     JsonDocument d;
@@ -403,13 +403,13 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
   } else if (!strcmp(t, "macro_get")) {
     const char* id = o["id"] | "";
     if (!macro_exists(id)) {
-      reply_error(src, peerId, "macro inesistente");
+      reply_error(src, peerId, "macro not found");
       return;
     }
     JsonDocument stepsDoc;
     String blob = macro_blob(id);
     if (deserializeJson(stepsDoc, blob) != DeserializationError::Ok || !stepsDoc.is<JsonArray>()) {
-      reply_error(src, peerId, "macro corrotta in NVS");
+      reply_error(src, peerId, "corrupted macro in NVS");
       return;
     }
     JsonDocument d;
@@ -418,7 +418,7 @@ static void dispatch_json(Transport src, uint32_t peerId, const char* raw, uint3
     d["steps"] = stepsDoc.as<JsonArray>();
     reply_doc(src, peerId, d);
   } else {
-    reply_error(src, peerId, "tipo messaggio sconosciuto");
+    reply_error(src, peerId, "unknown message type");
   }
 }
 
@@ -438,7 +438,7 @@ static void tick_text(uint32_t now) {
     s_textPhase = TP_IDLE;
   }
 
-  // TP_IDLE: consuma il prossimo codepoint UTF-8 mappabile
+  // TP_IDLE: consume the next mappable UTF-8 codepoint
   while (s_textPos < s_textBuf.size()) {
     size_t consumed = 1;
     uint8_t usage = 0;
@@ -454,7 +454,7 @@ static void tick_text(uint32_t now) {
         s_textDeadline = now + 8;
         return;
       }
-      // 6KRO pieno: riprova al prossimo tick
+      // 6KRO full: retry on next tick
       return;
     }
     s_textPos += consumed;
@@ -467,13 +467,13 @@ static void tick_text(uint32_t now) {
 }
 
 // ---------------------------------------------------------------------------
-// Tick principale (chiamato da loopTask)
+// Main tick (called from loopTask)
 // ---------------------------------------------------------------------------
 
 bool commands_tick() {
   const uint32_t now = millis();
 
-  // 1) Scadenze rilasci brevi
+  // 1) Short key/button release deadlines
   if (s_kbRel.active && static_cast<int32_t>(now - s_kbRel.at) >= 0) {
     flush_kb_release();
   }
@@ -484,7 +484,7 @@ bool commands_tick() {
     flush_consumer_release();
   }
 
-  // 2) Drena la coda comandi con coalescing di mouse/scroll
+  // 2) Drain command queue with mouse/scroll coalescing
   bool drained = false;
   int32_t mouseDx = 0, mouseDy = 0;
   bool hasMouse = false;
@@ -549,7 +549,7 @@ bool commands_tick() {
     flush_mouse_scroll();
   }
 
-  // 3) Avanza text non-bloccante e player macro
+  // 3) Advance non-blocking text typing and macro player
   tick_text(now);
   macro_tick();
 

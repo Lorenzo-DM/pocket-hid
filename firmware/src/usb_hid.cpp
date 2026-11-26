@@ -1,8 +1,8 @@
 #include "usb_hid.h"
 #include <Adafruit_TinyUSB.h>
 
-// Descrittori report: un'istanza Adafruit_USBD_HID per interfaccia,
-// senza report ID (ogni interfaccia ha il suo descrittore).
+// Report descriptors: one Adafruit_USBD_HID instance per interface,
+// without report IDs (each interface has its own descriptor).
 
 static uint8_t const desc_kb[]       = { TUD_HID_REPORT_DESC_KEYBOARD() };
 static uint8_t const desc_mouse[]    = { TUD_HID_REPORT_DESC_MOUSE() };
@@ -12,7 +12,7 @@ static Adafruit_USBD_HID hid_kb(desc_kb, sizeof(desc_kb), HID_ITF_PROTOCOL_KEYBO
 static Adafruit_USBD_HID hid_mouse(desc_mouse, sizeof(desc_mouse), HID_ITF_PROTOCOL_NONE, 5, false);
 static Adafruit_USBD_HID hid_consumer(desc_consumer, sizeof(desc_consumer), HID_ITF_PROTOCOL_NONE, 10, false);
 
-// Stato corrente dei pulsanti mouse (bit0=left, bit1=right, bit2=middle)
+// Current mouse button state (bit0=left, bit1=right, bit2=middle)
 static uint8_t s_buttons = 0;
 
 bool usb_hid_begin() {
@@ -64,7 +64,7 @@ bool mouse_release_all() {
 
 bool mouse_scroll(int8_t dx, int8_t dy) {
   if (!usb_hid_mounted()) return false;
-  // wheel = asse Y, pan = asse X
+  // wheel = Y axis, pan = X axis
   return hid_mouse.mouseReport(0, s_buttons, 0, 0, dy, dx);
 }
 

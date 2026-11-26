@@ -1,14 +1,14 @@
-"""PlatformIO pre-build hook: assicura CFG_TUD_HID >= 3 in Adafruit TinyUSB.
+"""PlatformIO pre-build hook: ensures CFG_TUD_HID >= 3 in Adafruit TinyUSB.
 
-La libreria Adafruit TinyUSB per ESP32 definisce di default CFG_TUD_HID = 2,
-scartando silenziosamente la 3ª interfaccia HID (Consumer Control / media keys).
-Questo script applica la patch in modo idempotente prima della compilazione.
+Adafruit TinyUSB for ESP32 defaults to CFG_TUD_HID = 2, silently dropping the
+3rd HID interface (Consumer Control / media keys). This script applies the
+patch idempotently before compilation.
 """
 
 import os
 import re
 
-Import("env")  # noqa: F821 (fornito da PlatformIO SCons)
+Import("env")  # noqa: F821 (provided by PlatformIO SCons)
 
 libdeps_dir = env.subst("$PROJECT_LIBDEPS_DIR/$PIOENV")
 target = os.path.join(
