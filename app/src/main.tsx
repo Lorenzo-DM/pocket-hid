@@ -9,11 +9,11 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// Service Worker solo in build di produzione (evita cache in dev)
+// Service Worker only in production builds (avoids stale cache in dev)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // offline non disponibile (es. file:// o SW non supportato): non blocca
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // Offline unavailable (e.g. file:// or unsupported SW): non-blocking
     });
   });
 }
