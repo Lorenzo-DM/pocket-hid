@@ -11,7 +11,7 @@
 #include "config_local.h"
 #endif
 
-#define MK_FW_VERSION "0.3.0"
+#define MK_FW_VERSION "0.3.1"
 #define MK_HOSTNAME   "pockethid"
 #define MK_MDNS_NAME  "pockethid"
 #define MK_WS_PORT    80
