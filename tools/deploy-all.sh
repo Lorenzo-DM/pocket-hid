@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Compila, testa e carica tutto il progetto PocketHID (PWA + firmware ESP32-S3).
+# Build, test, and flash the entire PocketHID project (PWA + ESP32-S3 firmware).
 #
-# Uso:
-#   ./tools/deploy-all.sh                 # test + build + upload firmware e LittleFS
-#   ./tools/deploy-all.sh --build-only    # test + build senza upload su ESP32
-#   ./tools/deploy-all.sh --no-fw         # solo PWA (build + uploadfs)
-#   ./tools/deploy-all.sh --no-pwa        # solo firmware (test + build + upload)
-#   ./tools/deploy-all.sh --no-tests      # salta lint e test nativi
-#   ./tools/deploy-all.sh --android       # aggiunge `cap sync android`
-#   ./tools/deploy-all.sh --release       # aggiorna anche tools/flash/
-#   ./tools/deploy-all.sh --port /dev/... # forza la porta seriale (o PIO_UPLOAD_PORT)
+# Usage:
+#   ./tools/deploy-all.sh                 # test + build + upload firmware and LittleFS
+#   ./tools/deploy-all.sh --build-only    # test + build without uploading to ESP32
+#   ./tools/deploy-all.sh --no-fw         # PWA only (build + uploadfs)
+#   ./tools/deploy-all.sh --no-pwa        # firmware only (test + build + upload)
+#   ./tools/deploy-all.sh --no-tests      # skip lint and native unit tests
+#   ./tools/deploy-all.sh --android       # also run `cap sync android`
+#   ./tools/deploy-all.sh --release       # also update tools/flash/
+#   ./tools/deploy-all.sh --port /dev/... # force serial port (or set PIO_UPLOAD_PORT)
 
 set -euo pipefail
 
@@ -36,7 +36,7 @@ while [ $# -gt 0 ]; do
     --android)    DO_ANDROID=1 ;;
     --release)    DO_RELEASE=1 ;;
     -p|--port)
-      [ $# -ge 2 ] || { echo "ERRORE: --port richiede un argomento" >&2; exit 2; }
+      [ $# -ge 2 ] || { echo "ERROR: --port requires an argument" >&2; exit 2; }
       PORT="$2"
       shift
       ;;
@@ -45,7 +45,7 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     *)
-      echo "ERRORE: opzione sconosciuta '$1'" >&2
+      echo "ERROR: unknown option '$1'" >&2
       usage >&2
       exit 2
       ;;
@@ -61,7 +61,7 @@ find_pio() {
   elif [ -x "$HOME/.local/bin/pio" ]; then
     echo "$HOME/.local/bin/pio"
   else
-    echo "ERRORE: PlatformIO (pio) non trovato nel PATH." >&2
+    echo "ERROR: PlatformIO (pio) not found in PATH." >&2
     exit 1
   fi
 }
@@ -86,20 +86,20 @@ if [ "$DO_FW" -eq 1 ] || { [ "$DO_PWA" -eq 1 ] && [ "$BUILD_ONLY" -eq 0 ]; }; th
   PIO="$(find_pio)"
 fi
 
-# 1. PWA: lint + build + copia/gzip in firmware/data
+# 1. PWA: lint + build + copy/gzip into firmware/data
 if [ "$DO_PWA" -eq 1 ]; then
   if [ "$DO_TESTS" -eq 1 ]; then
-    step "Lint PWA (app/)"
+    step "Linting PWA (app/)"
     (cd "$ROOT/app" && npm run lint)
   fi
 
-  step "Build e preparazione PWA (firmware/data/)"
+  step "Building and preparing PWA (firmware/data/)"
   "$ROOT/tools/deploy-pwa.sh" --prep-only
 fi
 
-# 2. Android (opzionale)
+# 2. Android (optional)
 if [ "$DO_ANDROID" -eq 1 ]; then
-  step "Sync Capacitor Android"
+  step "Syncing Capacitor Android"
   if [ "$DO_PWA" -eq 1 ]; then
     (cd "$ROOT/app" && npx cap sync android)
   else
@@ -107,28 +107,28 @@ if [ "$DO_ANDROID" -eq 1 ]; then
   fi
 fi
 
-# 3. Firmware: test nativi + build ESP32-S3
+# 3. Firmware: native tests + ESP32-S3 build
 if [ "$DO_FW" -eq 1 ]; then
   if [ "$DO_TESTS" -eq 1 ]; then
-    step "Test unitari firmware (pio test -e native)"
+    step "Running firmware unit tests (pio test -e native)"
     (cd "$ROOT/firmware" && "$PIO" test -e native)
   fi
 
-  step "Build firmware ESP32-S3"
+  step "Building ESP32-S3 firmware"
   (cd "$ROOT/firmware" && "$PIO" run -e esp32s3)
 fi
 
-# 4. Web flasher release (opzionale)
+# 4. Web flasher release (optional)
 if [ "$DO_RELEASE" -eq 1 ]; then
-  step "Build LittleFS image (pio run -t buildfs)"
+  step "Building LittleFS image (pio run -t buildfs)"
   (cd "$ROOT/firmware" && "$PIO" run -e esp32s3 -t buildfs)
-  step "Aggiornamento tools/flash/"
+  step "Updating tools/flash/"
   "$ROOT/tools/make-flash-release.sh"
 fi
 
-# 5. Upload su ESP32-S3
+# 5. Upload to ESP32-S3
 if [ "$BUILD_ONLY" -eq 1 ] || { [ "$DO_FW" -eq 0 ] && [ "$DO_PWA" -eq 0 ]; }; then
-  step "Build completata (upload saltato)"
+  step "Build completed (upload skipped)"
   exit 0
 fi
 
@@ -136,31 +136,31 @@ if [ -z "$PORT" ]; then
   if ! PORT="$(detect_port)"; then
     cat >&2 <<'EOF'
 
-ERRORE: nessuna porta seriale ESP32-S3 trovata (/dev/cu.usbmodem*, /dev/ttyACM*, /dev/ttyUSB*).
-Per entrare in download mode sulla board single-USB:
-  1. scollega il cavo USB
-  2. tieni premuto BOOT
-  3. ricollega il cavo e rilascia BOOT dopo ~2s
-Poi rilancia lo script (oppure specifica --port /dev/...).
+ERROR: no ESP32-S3 serial port found (/dev/cu.usbmodem*, /dev/ttyACM*, /dev/ttyUSB*).
+To enter download mode on a single-USB board:
+  1. Unplug the USB cable
+  2. Hold BOOT
+  3. Plug the cable back in and release BOOT after ~2s
+Then re-run this script (or pass --port /dev/...).
 EOF
     exit 1
   fi
 fi
 
-step "Porta seriale rilevata: $PORT"
+step "Detected serial port: $PORT"
 
 if [ "$DO_FW" -eq 1 ]; then
-  step "Upload firmware su $PORT"
+  step "Uploading firmware to $PORT"
   (cd "$ROOT/firmware" && "$PIO" run -e esp32s3 -t upload --upload-port "$PORT")
 fi
 
 if [ "$DO_PWA" -eq 1 ]; then
-  step "Upload LittleFS (PWA) su $PORT"
+  step "Uploading LittleFS (PWA) to $PORT"
   (cd "$ROOT/firmware" && "$PIO" run -e esp32s3 -t uploadfs --upload-port "$PORT")
 fi
 
 cat <<'EOF'
 
-==> Tutto completato!
-Scollega e ricollega il cavo USB (senza premere BOOT) per avviare il firmware.
+==> All done!
+Unplug and replug the USB cable (without holding BOOT) to start the firmware.
 EOF

@@ -624,7 +624,7 @@
         renderAll();
       }
 
-      // Registrazione da tastiera fisica
+      // Physical keyboard recording
       let soloMods = 0;
       let otherKeyDuringMod = false;
 
@@ -689,7 +689,7 @@
         recordWaitIfNeeded();
 
         const hasCmdMod = e.ctrlKey || e.altKey || e.metaKey;
-        // Carattere stampabile ASCII senza Ctrl/Alt/Meta -> raggruppa in step TESTO
+        // Printable ASCII character without Ctrl/Alt/Meta -> group into TEXT step
         if (!hasCmdMod && e.key.length === 1 && e.key.charCodeAt(0) >= 0x20 && e.key.charCodeAt(0) <= 0x7e) {
           const steps = current().steps;
           const prev = steps[steps.length - 1];
@@ -733,7 +733,7 @@
         }
       }, true);
 
-      // Azioni UI
+      // UI actions
       $('btnRec').onclick = toggleRecording;
       $('macroName').oninput = (e) => {
         current().name = e.target.value;

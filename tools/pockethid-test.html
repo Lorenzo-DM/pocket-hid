@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PocketHID — pagina di test</title>
+<title>PocketHID — Test Page</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 1.5rem; background:#111; color:#ddd; max-width: 640px; }
   h1 { font-size: 1.2rem; }
@@ -19,23 +19,23 @@
 </style>
 </head>
 <body>
-<h1>PocketHID — pagina di test</h1>
+<h1>PocketHID — Test Page</h1>
 
 <section>
-  <output id="status">disconnesso</output><br><br>
+  <output id="status">disconnected</output><br><br>
   <label>Host: <input id="host" value="ws://pockethid.local/ws" size="28"></label>
-  <label>Token: <input id="token" value="" size="12" placeholder="(vuoto ok)"></label>
-  <button id="btnConnect">Connetti</button>
+  <label>Token: <input id="token" value="" size="12" placeholder="(empty ok)"></label>
+  <button id="btnConnect">Connect</button>
 </section>
 
 <section>
-  <h2>Testo da digitare</h2>
-  <input id="txt" value="ciao dal firmware PocketHID!" size="34">
-  <button class="act" data-act="text">Digita</button>
+  <h2>Text to type</h2>
+  <input id="txt" value="hello from PocketHID firmware!" size="34">
+  <button class="act" data-act="text">Type</button>
 </section>
 
 <section>
-  <h2>Tasti singoli (code HID page 0x07)</h2>
+  <h2>Single keys (HID usage page 0x07)</h2>
   <div>
     <label><input type="checkbox" id="mCtrl"> Ctrl</label>
     <label><input type="checkbox" id="mShift"> Shift</label>
@@ -62,7 +62,7 @@
 
 <section>
   <h2>Mouse</h2>
-  <div id="pad">muovi qui</div><br>
+  <div id="pad">drag here</div><br>
   <button id="bLeft">⭯ left</button>
   <button id="bRight">⭯ right</button>
   <button id="bClick">click</button>
@@ -78,7 +78,7 @@ const status = (s, ok) => { const el = document.getElementById('status');
 
 function connect() {
   host = document.getElementById('host').value;
-  status('connessione a ' + host + '…');
+  status('connecting to ' + host + '…');
   ws = new WebSocket(host);
   ws.onopen = () => {
     status('handshake…');
@@ -86,15 +86,15 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.t === 'welcome') status('connesso — fw ' + m.fw + ' · layout ' + m.layout, true);
-    else if (m.t === 'error') status('ERRORE: ' + m.msg);
+    if (m.t === 'welcome') status('connected — fw ' + m.fw + ' · layout ' + m.layout, true);
+    else if (m.t === 'error') status('ERROR: ' + m.msg);
   };
-  ws.onerror = () => status('errore WebSocket');
-  ws.onclose = () => status('disconnesso');
+  ws.onerror = () => status('WebSocket error');
+  ws.onclose = () => status('disconnected');
 }
 
 const send = (obj) => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
-  status('non connesso'); return false; };
+  status('not connected'); return false; };
 
 const mods = () => (document.getElementById('mCtrl').checked ? 1 : 0) |
   (document.getElementById('mShift').checked ? 2 : 0) |
@@ -103,7 +103,7 @@ const mods = () => (document.getElementById('mCtrl').checked ? 1 : 0) |
 
 document.getElementById('btnConnect').onclick = connect;
 
-// testo
+// text
 document.querySelectorAll('.act').forEach(b => b.onclick = () => {
   const a = b.dataset.act;
   if (a === 'text') send({ t: 'text', s: document.getElementById('txt').value });
@@ -111,12 +111,12 @@ document.querySelectorAll('.act').forEach(b => b.onclick = () => {
   if (a === 'scrollDown') send({ t: 'scroll', dy: 1 });
 });
 
-// tasti
+// keys
 document.querySelectorAll('.key').forEach(b => b.onpointerdown = () => send({ t: 'key', code: +b.dataset.code, mods: mods(), act: 't' }));
 // consumer
 document.querySelectorAll('.con').forEach(b => b.onclick = () => send({ t: 'consumer', code: parseInt(b.dataset.code) }));
 
-// mouse: trascina il pad = movimento relativo
+// mouse: drag on pad = relative movement
 const pad = document.getElementById('pad');
 let px = null, py = null;
 pad.onpointerdown = (e) => { px = e.clientX; py = e.clientY; pad.setPointerCapture(e.pointerId); };
