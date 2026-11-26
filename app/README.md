@@ -31,7 +31,16 @@ From the repository root:
 
 ## Building the Android App (Capacitor)
 
-Requires Android Studio / Android SDK.
+Prebuilt `.apk` files are attached automatically to each GitHub Release by `.github/workflows/release.yml`.
+
+To sign release APKs in CI, add these GitHub repository secrets (otherwise CI automatically falls back to a sideloadable debug APK):
+
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded `.jks`/`.keystore` file (`base64 -i release.keystore | tr -d '\n'`)
+- `ANDROID_KEYSTORE_PASSWORD` — keystore password
+- `ANDROID_KEY_ALIAS` — signing key alias
+- `ANDROID_KEY_PASSWORD` — signing key password
+
+To build locally (requires Android Studio / Android SDK):
 
 ```bash
 cd app
