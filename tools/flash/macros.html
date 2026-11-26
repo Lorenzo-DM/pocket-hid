@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -198,89 +198,89 @@
   <header>
     <div>
       <h1>PocketHID <span>· Macro Studio</span></h1>
-      <div class="muted">Registra o componi macro dal PC, esporta il file JSON e importalo nella PWA sul telefono.</div>
+      <div class="muted">Record or build macros on your PC, export the JSON file, and import it into the PocketHID app.</div>
     </div>
-    <a href="./index.html">← Torna al Flash Firmware</a>
+    <a href="./index.html">← Back to Web Flasher</a>
   </header>
 
   <input id="fileInput" type="file" accept=".json,application/json" style="display:none" />
 
   <div class="layout">
-    <!-- Colonna sinistra: libreria e preset -->
+    <!-- Left column: library and presets -->
     <aside class="card">
       <div class="row between">
-        <h2>Libreria PC</h2>
-        <button id="btnNew" class="primary sm">+ Nuova</button>
+        <h2>PC Library</h2>
+        <button id="btnNew" class="primary sm">+ New</button>
       </div>
       <div class="row" style="margin-top:8px">
-        <button id="btnImport" class="sm">Importa JSON</button>
-        <button id="btnExportAll" class="sm">Esporta tutto</button>
+        <button id="btnImport" class="sm">Import JSON</button>
+        <button id="btnExportAll" class="sm">Export all</button>
       </div>
 
       <ul id="macroList" class="macro-list"></ul>
 
-      <h3>Preset rapidi</h3>
+      <h3>Quick presets</h3>
       <div id="presetList" class="row"></div>
     </aside>
 
-    <!-- Colonna destra: editor & registratore -->
+    <!-- Right column: editor & recorder -->
     <main class="card">
       <div class="row between" style="margin-bottom:10px">
-        <h2 id="editorTitle">Nuova macro</h2>
-        <button id="btnDeleteMacro" class="danger sm">Elimina macro</button>
+        <h2 id="editorTitle">New macro</h2>
+        <button id="btnDeleteMacro" class="danger sm">Delete macro</button>
       </div>
 
-      <label class="muted" for="macroName">Nome macro</label>
-      <input id="macroName" type="text" maxlength="60" placeholder="es. Linux Terminale + top" style="margin-top:4px" />
+      <label class="muted" for="macroName">Macro name</label>
+      <input id="macroName" type="text" maxlength="60" placeholder="e.g. Linux: Terminal + top" style="margin-top:4px" />
 
-      <!-- Registratore tastiera -->
+      <!-- Keyboard recorder -->
       <div id="recBox" class="rec-box">
         <div class="row between">
-          <button id="btnRec">● Registra da tastiera</button>
+          <button id="btnRec">● Record from keyboard</button>
           <label class="muted" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
             <input id="chkRecWaits" type="checkbox" checked />
-            Registra pause (&gt;400 ms)
+            Record pauses (&gt;400 ms)
           </label>
         </div>
         <p id="recHint" class="muted" style="margin:8px 0 0">
-          Premi <strong>Registra</strong> e digita sulla tastiera fisica: le lettere vengono raggruppate in step <code>TESTO</code>, i tasti speciali e le scorciatoie in step <code>TASTO</code>. Le scorciatoie intercettate dal sistema operativo (es. <code>Ctrl+Alt+T</code>, <code>Win</code>) aggiungile coi pulsanti sotto.
+          Click <strong>Record</strong> and type on your physical keyboard: printable characters are grouped into <code>TEXT</code> steps, special keys and shortcuts into <code>KEY</code> steps. For OS-intercepted shortcuts (e.g. <code>Ctrl+Alt+T</code>, <code>Win</code>), use the quick buttons below.
         </p>
       </div>
 
-      <!-- Tasti rapidi di sistema -->
-      <h3>Tasti rapidi (anche di sistema)</h3>
+      <!-- Quick system keys -->
+      <h3>Quick keys (including system shortcuts)</h3>
       <div id="quickSteps" class="row"></div>
 
-      <!-- Aggiunta manuale -->
-      <h3>Aggiungi step manuale</h3>
+      <!-- Manual step builder -->
+      <h3>Add step manually</h3>
       <div class="row">
         <select id="stepKind">
-          <option value="text">Testo</option>
-          <option value="key">Tasto / Scorciatoia</option>
-          <option value="wait">Attesa (ms)</option>
+          <option value="text">Text</option>
+          <option value="key">Key / Shortcut</option>
+          <option value="wait">Wait (ms)</option>
           <option value="media">Media</option>
         </select>
         <div id="builderInputs" class="row" style="flex:1"></div>
-        <button id="btnAddStep" class="sm">+ Aggiungi</button>
+        <button id="btnAddStep" class="sm">+ Add</button>
       </div>
 
-      <!-- Lista step -->
+      <!-- Step list -->
       <div class="row between" style="margin-top:14px">
-        <h3 style="margin:0">Step (<span id="stepCount">0</span>)</h3>
-        <button id="btnClearSteps" class="sm danger">Svuota step</button>
+        <h3 style="margin:0">Steps (<span id="stepCount">0</span>)</h3>
+        <button id="btnClearSteps" class="sm danger">Clear steps</button>
       </div>
       <ol id="stepList" class="steps"></ol>
 
-      <!-- Esportazione e invio -->
+      <!-- Export and push -->
       <div class="row" style="margin-top:14px">
-        <button id="btnExportOne" class="primary">⬇ Scarica JSON</button>
-        <button id="btnCopyJson">Copia JSON</button>
-        <button id="btnBlePush" title="Invia direttamente nella NVS dell'ESP32 via Web Bluetooth (Chrome/Edge)">Invia a ESP (BLE)</button>
+        <button id="btnExportOne" class="primary">⬇ Download JSON</button>
+        <button id="btnCopyJson">Copy JSON</button>
+        <button id="btnBlePush" title="Send directly to ESP32 NVS over Web Bluetooth (Chrome/Edge)">Send to ESP (BLE)</button>
       </div>
       <div id="statusBar" class="status-bar"></div>
 
       <details>
-        <summary>Anteprima JSON</summary>
+        <summary>JSON Preview</summary>
         <pre id="jsonPreview"></pre>
       </details>
     </main>
@@ -340,31 +340,31 @@
         ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => ({ label: l, code: K[l] })),
         ...'1234567890'.split('').map((d) => ({ label: d, code: K['N' + d] })),
         ...Array.from({ length: 12 }, (_, i) => ({ label: 'F' + (i + 1), code: K.F1 + i })),
-        { label: 'Invio', code: K.ENTER }, { label: 'Esc', code: K.ESC },
-        { label: 'Tab', code: K.TAB }, { label: 'Spazio', code: K.SPACE },
+        { label: 'Enter', code: K.ENTER }, { label: 'Esc', code: K.ESC },
+        { label: 'Tab', code: K.TAB }, { label: 'Space', code: K.SPACE },
         { label: 'Backspace', code: K.BACKSPACE }, { label: 'Delete', code: K.DELETE },
         { label: '←', code: K.LEFT }, { label: '→', code: K.RIGHT },
         { label: '↓', code: K.DOWN }, { label: '↑', code: K.UP },
         { label: 'Home', code: K.HOME }, { label: 'End', code: K.END },
-        { label: 'PgSu', code: K.PAGEUP }, { label: 'PgGiù', code: K.PAGEDOWN },
+        { label: 'PgUp', code: K.PAGEUP }, { label: 'PgDn', code: K.PAGEDOWN },
         { label: 'CapsLock', code: K.CAPSLOCK }, { label: 'PrintScreen', code: K.PRINTSCREEN },
         { label: 'Insert', code: K.INSERT }, { label: 'Pause', code: K.PAUSE },
         { label: '- / _', code: K.MINUS }, { label: '= / +', code: K.EQUAL },
         { label: '[ / {', code: K.LBRACKET }, { label: '] / }', code: K.RBRACKET },
         { label: '/ / ?', code: K.SLASH }, { label: '. / >', code: K.DOT },
-        { label: ', / <', code: K.COMMA }, { label: '(Solo modificatori)', code: 0 },
+        { label: ', / <', code: K.COMMA }, { label: '(Modifiers only)', code: 0 },
       ];
 
       const MEDIA_OPTIONS = [
-        { label: 'Play / Pausa', code: CONSUMER.PLAY_PAUSE },
+        { label: 'Play / Pause', code: CONSUMER.PLAY_PAUSE },
         { label: 'Vol +', code: CONSUMER.VOLUME_UP },
         { label: 'Vol −', code: CONSUMER.VOLUME_DOWN },
         { label: 'Mute', code: CONSUMER.MUTE },
-        { label: 'Traccia succ.', code: CONSUMER.NEXT_TRACK },
-        { label: 'Traccia prec.', code: CONSUMER.PREV_TRACK },
+        { label: 'Next track', code: CONSUMER.NEXT_TRACK },
+        { label: 'Prev track', code: CONSUMER.PREV_TRACK },
         { label: 'Stop', code: CONSUMER.STOP },
-        { label: 'Lum +', code: CONSUMER.BRIGHTNESS_UP },
-        { label: 'Lum −', code: CONSUMER.BRIGHTNESS_DOWN },
+        { label: 'Bright +', code: CONSUMER.BRIGHTNESS_UP },
+        { label: 'Bright −', code: CONSUMER.BRIGHTNESS_DOWN },
       ];
 
       const QUICK_STEPS = [
@@ -375,7 +375,7 @@
         { label: 'Alt+Tab', step: { k: K.TAB, m: MOD.ALT } },
         { label: 'Alt+F4', step: { k: K.F4, m: MOD.ALT } },
         { label: 'Ctrl+Shift+Esc', step: { k: K.ESC, m: MOD.CTRL | MOD.SHIFT } },
-        { label: '↵ Invio', step: { k: K.ENTER } },
+        { label: '↵ Enter', step: { k: K.ENTER } },
         { label: '⏱ 500ms', step: { w: 500 } },
         { label: '⏱ 1s', step: { w: 1000 } },
         { label: '⏯ Play', step: { c: CONSUMER.PLAY_PAUSE } },
@@ -383,7 +383,7 @@
 
       const PRESETS = [
         {
-          name: 'Linux: Terminale + top',
+          name: 'Linux: Terminal + top',
           steps: [
             { k: K.T, m: MOD.CTRL | MOD.ALT },
             { w: 800 },
@@ -392,7 +392,7 @@
           ],
         },
         {
-          name: 'Linux: Terminale + htop',
+          name: 'Linux: Terminal + htop',
           steps: [
             { k: K.T, m: MOD.CTRL | MOD.ALT },
             { w: 800 },
@@ -401,7 +401,7 @@
           ],
         },
         {
-          name: 'Windows: Blocca PC',
+          name: 'Windows: Lock PC',
           steps: [{ k: K.L, m: MOD.GUI }],
         },
         {
@@ -414,7 +414,7 @@
           ],
         },
         {
-          name: 'macOS: Terminale',
+          name: 'macOS: Terminal',
           steps: [
             { k: K.SPACE, m: MOD.GUI },
             { w: 400 },
@@ -424,7 +424,7 @@
         },
       ];
 
-      // Stato
+      // State
       let macros = loadLibrary();
       let activeIdx = 0;
       let recording = false;
@@ -432,7 +432,7 @@
       let builderMods = 0;
 
       if (macros.length === 0) {
-        macros = [{ name: 'Linux: Terminale + top', steps: PRESETS[0].steps.map((s) => ({ ...s })) }];
+        macros = [{ name: 'Linux: Terminal + top', steps: PRESETS[0].steps.map((s) => ({ ...s })) }];
         saveLibrary();
       }
 
@@ -460,10 +460,10 @@
       function current() { return macros[activeIdx]; }
 
       function stepBadge(s) {
-        if ('k' in s) return 'TASTO';
-        if ('s' in s) return 'TESTO';
+        if ('k' in s) return 'KEY';
+        if ('s' in s) return 'TEXT';
         if ('c' in s) return 'MEDIA';
-        return 'ATTESA';
+        return 'WAIT';
       }
 
       function stepLabel(s) {
@@ -502,10 +502,10 @@
           li.innerHTML = `
             <div style="min-width:0">
               <div class="macro-item-name"></div>
-              <div class="macro-item-sub">${m.steps.length} step</div>
+              <div class="macro-item-sub">${m.steps.length} ${m.steps.length === 1 ? 'step' : 'steps'}</div>
             </div>
           `;
-          li.querySelector('.macro-item-name').textContent = m.name || '(Senza nome)';
+          li.querySelector('.macro-item-name').textContent = m.name || '(Untitled)';
           li.onclick = () => {
             stopRecording();
             activeIdx = i;
@@ -517,7 +517,7 @@
 
       function renderEditor() {
         const m = current();
-        $('editorTitle').textContent = m.name ? `Macro: ${m.name}` : 'Nuova macro';
+        $('editorTitle').textContent = m.name ? `Macro: ${m.name}` : 'New macro';
         $('macroName').value = m.name;
         $('stepCount').textContent = String(m.steps.length);
         $('btnDeleteMacro').disabled = macros.length <= 1;
@@ -528,7 +528,7 @@
           const li = document.createElement('li');
           li.className = 'muted';
           li.style.padding = '10px 4px';
-          li.textContent = 'Nessuno step: usa "Registra da tastiera" oppure aggiungi step sopra.';
+          li.textContent = 'No steps yet: use "Record from keyboard" or add steps above.';
           ol.appendChild(li);
         } else {
           m.steps.forEach((s, i) => {
@@ -571,7 +571,7 @@
           const inp = document.createElement('input');
           inp.id = 'bText';
           inp.type = 'text';
-          inp.placeholder = 'Testo ASCII da digitare (es. top)';
+          inp.placeholder = 'ASCII text to type (e.g. top)';
           inp.style.flex = '1';
           box.appendChild(inp);
         } else if (kind === 'key') {
@@ -652,7 +652,7 @@
         recording = false;
         soloMods = 0;
         otherKeyDuringMod = false;
-        $('btnRec').textContent = '● Registra da tastiera';
+        $('btnRec').textContent = '● Record from keyboard';
         $('btnRec').classList.remove('rec-active');
         $('recBox').classList.remove('recording');
       }
@@ -666,11 +666,11 @@
         lastKeyTime = 0;
         soloMods = 0;
         otherKeyDuringMod = false;
-        $('btnRec').textContent = '■ Ferma registrazione';
+        $('btnRec').textContent = '■ Stop recording';
         $('btnRec').classList.add('rec-active');
         $('recBox').classList.add('recording');
         if (document.activeElement) document.activeElement.blur();
-        setStatus('Registrazione attiva: digita sulla tastiera…');
+        setStatus('Recording active: type on your keyboard…');
       }
 
       window.addEventListener('keydown', (e) => {
@@ -705,7 +705,7 @@
 
         const hid = CODE_TO_HID[e.code];
         if (!hid) {
-          setStatus(`Tasto non mappato (${e.code})`, true);
+          setStatus(`Unmapped key (${e.code})`, true);
           return;
         }
         const m = (e.ctrlKey ? MOD.CTRL : 0)
@@ -739,7 +739,7 @@
         current().name = e.target.value;
         saveLibrary();
         renderList();
-        $('editorTitle').textContent = current().name ? `Macro: ${current().name}` : 'Nuova macro';
+        $('editorTitle').textContent = current().name ? `Macro: ${current().name}` : 'New macro';
         $('jsonPreview').textContent = JSON.stringify({ version: 1, macros: [{ name: current().name || 'Macro', steps: current().steps }] }, null, 2);
       };
 
@@ -772,7 +772,7 @@
 
       $('btnNew').onclick = () => {
         stopRecording();
-        macros.push({ name: `Nuova macro ${macros.length + 1}`, steps: [] });
+        macros.push({ name: `New macro ${macros.length + 1}`, steps: [] });
         activeIdx = macros.length - 1;
         saveLibrary();
         renderAll();
@@ -799,25 +799,25 @@
 
       $('btnExportOne').onclick = () => {
         const m = current();
-        if (m.steps.length === 0) { setStatus('Aggiungi almeno uno step prima di esportare.', true); return; }
+        if (m.steps.length === 0) { setStatus('Add at least one step before exporting.', true); return; }
         const slug = (m.name || 'macro').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'macro';
         downloadJson({ version: 1, macros: [{ name: m.name || 'Macro', steps: m.steps }] }, `mk-macro-${slug}.json`);
-        setStatus('File JSON scaricato: importalo nella scheda Macro della PWA.');
+        setStatus('JSON file downloaded: import it in the Macros tab of the app.');
       };
 
       $('btnExportAll').onclick = () => {
         const valid = macros.filter((m) => m.steps.length > 0);
-        if (valid.length === 0) { setStatus('Nessuna macro con step da esportare.', true); return; }
+        if (valid.length === 0) { setStatus('No macros with steps to export.', true); return; }
         downloadJson({ version: 1, macros: valid.map(({ name, steps }) => ({ name, steps })) }, 'pocket-hid-macros.json');
-        setStatus(`Esportate ${valid.length} macro in pocket-hid-macros.json.`);
+        setStatus(`Exported ${valid.length} macro(s) to pocket-hid-macros.json.`);
       };
 
       $('btnCopyJson').onclick = async () => {
         try {
           await navigator.clipboard.writeText($('jsonPreview').textContent);
-          setStatus('JSON copiato negli appunti.');
+          setStatus('JSON copied to clipboard.');
         } catch {
-          setStatus('Impossibile copiare automaticamente.', true);
+          setStatus('Unable to copy automatically.', true);
         }
       };
 
@@ -832,29 +832,29 @@
           let added = 0;
           for (const item of list) {
             if (item && Array.isArray(item.steps) && item.steps.length > 0) {
-              macros.push({ name: String(item.name || item.id || 'Macro importata').slice(0, 60), steps: item.steps });
+              macros.push({ name: String(item.name || item.id || 'Imported macro').slice(0, 60), steps: item.steps });
               added++;
             }
           }
-          if (added === 0) { setStatus('Nessuna macro valida trovata.', true); return; }
+          if (added === 0) { setStatus('No valid macros found.', true); return; }
           activeIdx = macros.length - 1;
           saveLibrary();
           renderAll();
-          setStatus(`Importate ${added} macro nella libreria.`);
+          setStatus(`Imported ${added} macro(s) into library.`);
         } catch {
-          setStatus('File JSON non valido.', true);
+          setStatus('Invalid JSON file.', true);
         }
       };
 
-      // Invio opzionale diretto via Web Bluetooth nella NVS dell'ESP
+      // Optional direct push to ESP32 NVS via Web Bluetooth
       $('btnBlePush').onclick = async () => {
         if (!navigator.bluetooth) {
-          setStatus('Web Bluetooth non supportato da questo browser (usa Chrome/Edge desktop o esporta JSON).', true);
+          setStatus('Web Bluetooth is not supported in this browser (use desktop Chrome/Edge or export JSON).', true);
           return;
         }
         const m = current();
         if (m.steps.length === 0 || m.steps.length > 64) {
-          setStatus(`Per l'ESP servono tra 1 e 64 step (attuali: ${m.steps.length}).`, true);
+          setStatus(`ESP requires between 1 and 64 steps (current: ${m.steps.length}).`, true);
           return;
         }
         const espId = (m.name || 'macro')
@@ -862,11 +862,11 @@
           .replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'macro';
         const blob = JSON.stringify(m.steps);
         if (blob.length > 2048) {
-          setStatus(`Macro troppo grande per NVS ESP (${blob.length}/2048 byte).`, true);
+          setStatus(`Macro too large for ESP NVS (${blob.length}/2048 bytes).`, true);
           return;
         }
         try {
-          setStatus('Seleziona PocketHID nella finestra Bluetooth…');
+          setStatus('Select PocketHID in the Bluetooth picker…');
           const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_SVC] }] });
           const server = await dev.gatt.connect();
           const svc = await server.getPrimaryService(BLE_SVC);
@@ -883,13 +883,13 @@
           await writeMsg({ t: 'macro_save', id: espId, steps: m.steps });
           await new Promise((r) => setTimeout(r, 150));
           server.disconnect();
-          setStatus(`Macro inviata all'ESP32 come "${espId}".`);
+          setStatus(`Macro sent to ESP32 as "${espId}".`);
         } catch (err) {
-          setStatus('Invio BLE annullato o fallito: ' + (err?.message || err), true);
+          setStatus('BLE push cancelled or failed: ' + (err?.message || err), true);
         }
       };
 
-      // Popola quick steps e preset
+      // Populate quick steps and presets
       QUICK_STEPS.forEach((q) => {
         const btn = document.createElement('button');
         btn.className = 'pill';
@@ -908,7 +908,7 @@
           activeIdx = macros.length - 1;
           saveLibrary();
           renderAll();
-          setStatus(`Preset "${p.name}" aggiunto.`);
+          setStatus(`Preset "${p.name}" added.`);
         };
         $('presetList').appendChild(btn);
       });
